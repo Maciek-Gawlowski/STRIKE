@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx expo *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('expo-network:', p.dependencies['expo-network']||'NOT INSTALLED'\\)\")",
+      "Bash(node -e \"console.log\\('dir exists:', require\\('fs'\\).existsSync\\('./node_modules/expo-network'\\)\\)\")",
+      "Bash(npm run *)",
+      "Bash(KMP_DUPLICATE_LIB_OK=TRUE python -m src.beat_vocal_main --project data/projects/vocal_test_2 --prompt \"dark aggressive trap\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(KMP_DUPLICATE_LIB_OK=TRUE python -m pytest tests/test_beat_vocal_mode.py tests/test_vocal_fx.py -q)",
+      "Bash(KMP_DUPLICATE_LIB_OK=TRUE python -m pytest -q)",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\)\\) for f in ['src/beat_vocal/project_loader.py','src/vocal/vocal_chain.py']]; print\\('syntax OK'\\)\")",
+      "Bash(KMP_DUPLICATE_LIB_OK=TRUE python -m tools.measure_bands \"data/projects/vocal_test_2/beat.wav\" \"data/projects/vocal_test_2/output/beat_vocal_dark_aggressive_base_loud_mastered.wav\")",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\)\\) for f in ['src/vocal/vocal_chain.py','src/beat_vocal/render_path.py','src/mastering/streaming_master.py']]; print\\('syntax OK'\\)\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const p='C:/Users/user/Desktop/strike/assets'; try{console.log\\('assets:', fs.readdirSync\\(p\\)\\)}catch\\(e\\){console.log\\('no assets dir'\\)}; const pk=require\\('C:/Users/user/Desktop/strike/package.json'\\); console.log\\('google-fonts montserrat:', pk.dependencies['@expo-google-fonts/montserrat']||'NO'\\); console.log\\('google-fonts raleway:', pk.dependencies['@expo-google-fonts/raleway']||'NO'\\); console.log\\('expo-font:', pk.dependencies['expo-font']||'NO'\\); console.log\\('expo-splash-screen:', pk.dependencies['expo-splash-screen']||'NO'\\)\")",
+      "Bash(curl -s \"https://xomwxhxtpfzivghkpybi.supabase.co/rest/v1/bite_map_events?select=*&limit=1\" -H \"apikey: sb_publishable_Jma3PtgD9bTbDfH5cN_6zw_4pnx9g2p\" -H \"Authorization: Bearer sb_publishable_Jma3PtgD9bTbDfH5cN_6zw_4pnx9g2p\" -H \"Prefer: count=exact\" -D -)"
+    ]
+  }
+}

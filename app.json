@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "STRIKE",
+    "slug": "strike",
+    "scheme": "strike",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/logo.png",
+    "backgroundColor": "#0D1B2A",
+    "splash": {
+      "backgroundColor": "#0D1B2A"
+    },
+    "ios": {
+      "bundleIdentifier": "com.strikeangler.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "STRIKE uses your position to draw the fishing route and tag contacts, lost fish, and catches.",
+        "NSPhotoLibraryUsageDescription": "STRIKE lets you attach catch photos to your trip log."
+      }
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-location",
+      "expo-image-picker",
+      "expo-asset",
+      "expo-sqlite",
+      "expo-font",
+      "expo-localization"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
