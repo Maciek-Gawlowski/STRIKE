@@ -161,6 +161,16 @@ function toSnapshot(eventId: string, data: WeatherData): WeatherSnapshot {
 }
 
 /**
+ * Immediately writes already-fetched weather data as a snapshot for `eventId`.
+ * No network call — uses whatever the caller already has. Call this when the
+ * store's weather object is available so every event type gets conditions
+ * without an extra API round-trip.
+ */
+export function storeWeatherForEvent(eventId: string, data: WeatherData): void {
+  enqueueWrite((db) => insertWeatherSnapshot(db, toSnapshot(eventId, data)));
+}
+
+/**
  * Fetches and persists weather for a single event. Non-blocking by design:
  * call it with `void`. If offline, it no-ops and the event is left for
  * `syncPendingWeather` to back-fill later.

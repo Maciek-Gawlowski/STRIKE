@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ActionButton } from "@/components/ActionButton";
+import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { GlassCard } from "@/components/GlassCard";
+import { LureColourDot } from "@/components/LureColourDot";
 import { MetricChip } from "@/components/MetricChip";
 import { Screen } from "@/components/Screen";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -18,8 +20,11 @@ import {
   type Coordinate,
   type Trip
 } from "@/store/useStrikeStore";
+import { getDb } from "@/database/db";
 import { getOnboardingCompleted } from "@/database/preferences";
+import { getLures, type Lure } from "@/database/lures";
 import { formatWind } from "@/services/weather";
+import { getStreakData, type StreakData } from "@/services/statistics";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
@@ -37,6 +42,16 @@ function metersBetween(a: Coordinate, b: Coordinate): number {
   return radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+function autoTripName(t: (key: string) => string): string {
+  const hour = new Date().getHours();
+  if (hour >= 4  && hour < 9)  return t("home.tripMorning");
+  if (hour >= 9  && hour < 12) return t("home.tripLateMorning");
+  if (hour >= 12 && hour < 14) return t("home.tripNoon");
+  if (hour >= 14 && hour < 18) return t("home.tripAfternoon");
+  if (hour >= 18 && hour < 22) return t("home.tripEvening");
+  return t("home.tripNight");
+}
+
 function suggestTripName(location: Coordinate | null, trips: Trip[]): string | null {
   if (!location) return null;
   for (const trip of trips) {
@@ -48,6 +63,27 @@ function suggestTripName(location: Coordinate | null, trips: Trip[]): string | n
   return null;
 }
 
+/** Amber pill that breathes in/out while a trip is active. */
+function LiveBadge() {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.2, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true })
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+  return (
+    <Animated.View style={[liveBadge.root, { opacity }]}>
+      <View style={liveBadge.dot} />
+      <Text style={liveBadge.text}>LIVE</Text>
+    </Animated.View>
+  );
+}
+
 export default function HomeScreen() {
   const { t } = useTranslation();
   const activeTrip = useStrikeStore((state) => state.activeTrip);
@@ -57,11 +93,23 @@ export default function HomeScreen() {
   const startTrip = useStrikeStore((state) => state.startTrip);
   const stopTrip = useStrikeStore((state) => state.stopTrip);
   const addEvent = useStrikeStore((state) => state.addEvent);
+  const addCatch = useStrikeStore((state) => state.addCatch);
+  const recoveredStaleTrip = useStrikeStore((state) => state.recoveredStaleTrip);
+  const changeLure = useStrikeStore((state) => state.changeLure);
+  const saveRecoveredTrip = useStrikeStore((state) => state.saveRecoveredTrip);
+  const discardRecoveredTrip = useStrikeStore((state) => state.discardRecoveredTrip);
+
+  const celebAnim = useRef(new Animated.Value(0)).current;
 
   const [now, setNow] = useState(Date.now());
   const [tripNameOpen, setTripNameOpen] = useState(false);
   const [tripTitle, setTripTitle] = useState("");
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [modalLures, setModalLures] = useState<Lure[]>([]);
+  const [streakData, setStreakData] = useState<StreakData | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [lureChangeOpen, setLureChangeOpen] = useState(false);
+  const [selectedLureId, setSelectedLureId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -84,6 +132,17 @@ export default function HomeScreen() {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    getStreakData().then(setStreakData).catch(() => null);
+  }, [trips.length]);
+
+  useEffect(() => {
+    getDb()
+      .then((db) => db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM events WHERE sync_status = 'pending'"))
+      .then((row) => setPendingCount(row?.count ?? 0))
+      .catch(() => null);
+  }, [trips.length, activeTrip?.events.length]);
 
   // The trip shown in OVERBLIK: active trip if running, otherwise last completed trip.
   const displayTrip = activeTrip ?? trips[0] ?? null;
@@ -120,19 +179,34 @@ export default function HomeScreen() {
   }, [displayTrip, activeTrip, now, weather, t]);
 
   const recentTrips = trips.slice(0, 3);
+  const isEmpty = trips.length === 0 && !activeTrip;
+
+  // Load lures whenever we need them (trip start or active trip)
+  useEffect(() => {
+    if (modalLures.length === 0) {
+      getDb().then(getLures).then((list) => {
+        setModalLures(list);
+      }).catch(() => null);
+    }
+  }, []);
 
   const handleStartPress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setTripTitle(suggestTripName(currentLocation, trips) ?? "");
+    getDb().then(getLures).then((list) => {
+      setModalLures(list);
+      const fav = list.find((l) => l.isFavourite);
+      setSelectedLureId(fav?.id ?? null);
+    }).catch(() => null);
     setTripNameOpen(true);
   }, [currentLocation, trips]);
 
   const beginTrip = useCallback((title?: string) => {
     setTripNameOpen(false);
     setTripTitle("");
-    startTrip(undefined, "gps", title);
+    startTrip(undefined, "gps", title?.trim() || autoTripName(t), selectedLureId ?? undefined);
     router.push("/map");
-  }, [startTrip]);
+  }, [startTrip, selectedLureId, t]);
 
   const handleEvent = useCallback(async (type: "contact" | "following") => {
     if (!activeTrip) return;
@@ -140,12 +214,43 @@ export default function HomeScreen() {
     addEvent(type);
   }, [activeTrip, addEvent]);
 
-  const handleStop = useCallback(async () => {
+  const handleCatch = useCallback(async () => {
     if (!activeTrip) return;
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    stopTrip();
-    router.push("/summary");
-  }, [activeTrip, stopTrip]);
+    addCatch({
+      species: "",
+      comment: "",
+      kept: false,
+      position: currentLocation ?? undefined,
+      lureId: activeTrip.currentLureId ?? undefined,
+    });
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    celebAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(celebAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(320),
+      Animated.timing(celebAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start();
+  }, [activeTrip, addCatch, currentLocation, celebAnim]);
+
+  const handleStop = useCallback(() => {
+    if (!activeTrip) return;
+    Alert.alert(
+      t("trip.stopConfirmTitle"),
+      t("trip.stopConfirmBody"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("trip.stopConfirmBtn"),
+          style: "destructive",
+          onPress: async () => {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            stopTrip();
+            router.push("/summary");
+          },
+        },
+      ]
+    );
+  }, [activeTrip, stopTrip, t]);
 
   if (!onboardingChecked) {
     return <View style={styles.bootGate} />;
@@ -153,19 +258,45 @@ export default function HomeScreen() {
 
   return (
     <Screen contentStyle={styles.content}>
-      {/* ── Header (solid navy, logo only) ── */}
+      {/* ── Header ── */}
       <View style={styles.headerHero}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.kicker}>{t("home.kicker")}</Text>
-            <Text style={styles.logo}>STRIKE</Text>
+          <View style={styles.headerLeft}>
+            <Image
+              source={require("../../assets/strike-logo.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.tagline}>{t("home.tagline")}</Text>
           </View>
-          <Pressable style={styles.iconButton}>
-            <Ionicons name="notifications-outline" size={22} color={Colors.text} />
-          </Pressable>
+          {activeTrip ? <LiveBadge /> : null}
         </View>
       </View>
+
+      {/* ── Stale-trip recovery banner ── */}
+      {recoveredStaleTrip ? (
+        <GlassCard style={styles.recoverBanner}>
+          <Text style={styles.recoverTitle}>{t("home.recoverTitle")}</Text>
+          <Text style={styles.recoverBody}>
+            {t("home.recoverBody", {
+              date: new Date(recoveredStaleTrip.startedAt).toLocaleDateString([], {
+                weekday: "short",
+                month: "short",
+                day: "numeric"
+              })
+            })}
+          </Text>
+          <View style={styles.recoverButtons}>
+            <Pressable style={styles.recoverSaveBtn} onPress={() => { saveRecoveredTrip(); router.push("/summary"); }}>
+              <Ionicons name="checkmark-circle-outline" size={16} color={Colors.textOnAmber} />
+              <Text style={styles.recoverSaveText}>{t("home.recoverSave")}</Text>
+            </Pressable>
+            <Pressable style={styles.recoverDiscardBtn} onPress={discardRecoveredTrip}>
+              <Text style={styles.recoverDiscardText}>{t("home.recoverDiscard")}</Text>
+            </Pressable>
+          </View>
+        </GlassCard>
+      ) : null}
 
       {/* ── Primary CTA ── */}
       {!activeTrip ? (
@@ -180,26 +311,52 @@ export default function HomeScreen() {
           <View style={styles.eventRow}>
             <ActionButton compact label={t("actions.contact")} icon="flash-outline" tone="yellow" onPress={() => void handleEvent("contact")} />
             <ActionButton compact label={t("actions.following")} icon="eye-outline" tone="blue" onPress={() => void handleEvent("following")} />
-            <ActionButton compact label={t("actions.newCatch")} icon="camera-outline" tone="catch" onPress={() => router.push("/catch")} />
+            <ActionButton compact label={t("actions.newCatch")} icon="fish-outline" tone="catch" onPress={() => void handleCatch()} />
           </View>
-          <Pressable style={styles.stopButton} onPress={() => void handleStop()}>
+          {/* Lure change pill */}
+          {modalLures.length > 0 ? (
+            <Pressable style={styles.lureChangePill} onPress={() => setLureChangeOpen(true)}>
+              <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
+              <Text style={styles.lureChangePillText} numberOfLines={1}>
+                {modalLures.find((l) => l.id === (activeTrip?.currentLureId ?? selectedLureId))?.name ?? t("actions.changeLure")}
+              </Text>
+              <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
+            </Pressable>
+          ) : null}
+          <Pressable style={styles.stopButton} onPress={handleStop}>
             <Ionicons name="stop-circle-outline" size={20} color={Colors.dangerText} />
             <Text style={styles.stopText}>{t("actions.stopTrip")}</Text>
           </Pressable>
         </>
       )}
 
-      {/* ── OVERBLIK ── */}
-      {displayTrip ? (
+      {/* ── OVERBLIK / empty state ── */}
+      {isEmpty ? (
+        <StatCard style={styles.welcomeCard}>
+          <Text style={styles.welcomeTitle}>{t("home.welcomeTitle")}</Text>
+          <Text style={styles.welcomeText}>{t("home.welcomeText")}</Text>
+          <Text style={styles.welcomeHint}>{t("home.welcomeHint")}</Text>
+        </StatCard>
+      ) : displayTrip ? (
         <>
           <SectionHeader
             title={t("home.overblik")}
             linkLabel={activeTrip ? t("home.openRouteMap") : undefined}
             onLinkPress={activeTrip ? () => router.push("/map") : undefined}
           />
-          <View style={styles.overblikCard}>
-            {/* Map fills top of card, clipped by outer borderRadius */}
-            <TripMap route={displayTrip.route} events={displayTrip.events} height={150} interactive={false} />
+          <Pressable
+            style={styles.overblikCard}
+            onPress={!activeTrip ? () => router.push(`/trip/${displayTrip.id}`) : undefined}
+          >
+            <TripMap
+              route={displayTrip.route}
+              events={displayTrip.events}
+              height={150}
+              interactive={false}
+              isActive={!!activeTrip}
+              currentLocation={activeTrip ? currentLocation ?? undefined : undefined}
+              vignette
+            />
             {overblikChips.length > 0 ? (
               <View style={styles.chipRow}>
                 {overblikChips.map((chip) => (
@@ -207,46 +364,70 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : null}
-          </View>
+          </Pressable>
 
           {/* Counter row */}
           <GlassCard style={styles.counterCard}>
             <View style={styles.counterInner}>
               <View style={styles.counterItem}>
-                <Text style={styles.counterValue}>{tripContacts}</Text>
+                <AnimatedCounter value={tripContacts} style={styles.counterValue} />
                 <Text style={styles.counterLabel}>{t("home.counter.contacts")}</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counterItem}>
-                <Text style={styles.counterValue}>{tripFollowing}</Text>
+                <AnimatedCounter value={tripFollowing} style={styles.counterValue} />
                 <Text style={styles.counterLabel}>{t("home.counter.following")}</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counterItem}>
-                <Text style={styles.counterValue}>{tripCatches}</Text>
+                <AnimatedCounter value={tripCatches} style={styles.counterValue} />
                 <Text style={styles.counterLabel}>{t("home.counter.catches")}</Text>
               </View>
             </View>
           </GlassCard>
+
+          {/* Streak chips */}
+          {streakData && (streakData.tripsThisWeek > 0 || streakData.consecutiveDays > 0) ? (
+            <View style={styles.streakRow}>
+              {streakData.tripsThisWeek > 0 ? (
+                <View style={styles.streakChip}>
+                  <Ionicons name="calendar-outline" size={13} color={Colors.amber} />
+                  <Text style={styles.streakChipText}>
+                    {t("home.streak", { n: streakData.tripsThisWeek })}
+                  </Text>
+                </View>
+              ) : null}
+              {streakData.consecutiveDays > 0 ? (
+                <View style={styles.streakChip}>
+                  <Ionicons name="flame-outline" size={13} color={Colors.amber} />
+                  <Text style={styles.streakChipText}>
+                    {t("home.streakDays", { n: streakData.consecutiveDays })}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </>
-      ) : (
-        // Welcome state for new users
-        <StatCard style={styles.welcomeCard}>
-          <Text style={styles.welcomeTitle}>{t("home.welcomeTitle")}</Text>
-          <Text style={styles.welcomeText}>{t("home.welcomeText")}</Text>
-        </StatCard>
-      )}
+      ) : null}
+
+      {/* Sync status */}
+      {pendingCount > 0 ? (
+        <View style={styles.syncChip}>
+          <Ionicons name="cloud-upload-outline" size={13} color={Colors.amber} />
+          <Text style={styles.syncChipText}>{t("home.pendingSync", { n: pendingCount })}</Text>
+        </View>
+      ) : null}
 
       {/* ── MILJØDATA ── */}
       <SectionHeader
         title={t("home.miljoedata")}
         linkLabel={t("common.seeDetails")}
-        onLinkPress={() => router.push("/bitemap")}
+        onLinkPress={() => router.push("/stats")}
       />
       <WeatherStrip />
 
       {/* ── SENESTE TURE ── */}
-      {recentTrips.length > 0 ? (
+      {!isEmpty && recentTrips.length > 0 ? (
         <>
           <SectionHeader
             title={t("home.senesteTure")}
@@ -289,6 +470,48 @@ export default function HomeScreen() {
         </>
       ) : null}
 
+      {/* ── Catch celebration overlay ── */}
+      <Animated.View
+        style={[styles.celebOverlay, { opacity: celebAnim }]}
+        pointerEvents="none"
+      >
+        <Ionicons name="fish-outline" size={80} color={Colors.navy} />
+        <Text style={styles.celebText}>{t("events.catch")}</Text>
+      </Animated.View>
+
+      {/* ── Lure change modal ── */}
+      <Modal visible={lureChangeOpen} transparent animationType="fade" onRequestClose={() => setLureChangeOpen(false)}>
+        <Pressable style={styles.modalScrim} onPress={() => setLureChangeOpen(false)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t("actions.changeLure")}</Text>
+            <Pressable
+              style={styles.lureChip}
+              onPress={() => {
+                changeLure(null, t("catch.noLure"));
+                setLureChangeOpen(false);
+              }}
+            >
+              <Text style={styles.lureChipText}>{t("catch.noLure")}</Text>
+            </Pressable>
+            {modalLures.map((lure) => (
+              <Pressable
+                key={lure.id}
+                style={[styles.lureChip, activeTrip?.currentLureId === lure.id && styles.lureChipActive]}
+                onPress={() => {
+                  changeLure(lure.id, lure.name);
+                  setLureChangeOpen(false);
+                }}
+              >
+                <LureColourDot colourKey={lure.colour} colourSecondaryKey={lure.colourSecondary} size={10} />
+                <Text style={[styles.lureChipText, activeTrip?.currentLureId === lure.id && styles.lureChipTextActive]} numberOfLines={1}>
+                  {lure.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
       {/* ── Trip name modal ── */}
       <Modal visible={tripNameOpen} transparent animationType="fade" onRequestClose={() => setTripNameOpen(false)}>
         <View style={styles.modalScrim}>
@@ -306,9 +529,36 @@ export default function HomeScreen() {
               onSubmitEditing={() => beginTrip(tripTitle)}
               style={styles.modalInput}
             />
+            {modalLures.length > 0 ? (
+              <View style={styles.lurePicker}>
+                <Text style={styles.lurePickerLabel}>{t("home.startingLure")}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.lurePickerRow}>
+                  <Pressable
+                    style={[styles.lureChip, selectedLureId === null && styles.lureChipActive]}
+                    onPress={() => setSelectedLureId(null)}
+                  >
+                    <Text style={[styles.lureChipText, selectedLureId === null && styles.lureChipTextActive]}>
+                      {t("catch.noLure")}
+                    </Text>
+                  </Pressable>
+                  {modalLures.map((lure) => (
+                    <Pressable
+                      key={lure.id}
+                      style={[styles.lureChip, selectedLureId === lure.id && styles.lureChipActive]}
+                      onPress={() => setSelectedLureId(lure.id)}
+                    >
+                      <LureColourDot colourKey={lure.colour} colourSecondaryKey={lure.colourSecondary} size={10} />
+                      <Text style={[styles.lureChipText, selectedLureId === lure.id && styles.lureChipTextActive]} numberOfLines={1}>
+                        {lure.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
             <View style={styles.modalActions}>
-              <Pressable style={styles.modalSecondary} onPress={() => beginTrip()}>
-                <Text style={styles.modalSecondaryText}>{t("common.skip")}</Text>
+              <Pressable style={styles.modalSecondary} onPress={() => { setTripNameOpen(false); setTripTitle(""); }}>
+                <Text style={styles.modalSecondaryText}>{t("home.cancelTripStart")}</Text>
               </Pressable>
               <Pressable style={styles.modalPrimary} onPress={() => beginTrip(tripTitle)}>
                 <Ionicons name="navigate-circle-outline" size={20} color={Colors.textOnAmber} />
@@ -327,25 +577,82 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.navy
   },
+  recoverBanner: {
+    borderWidth: 1,
+    borderColor: Colors.amber,
+    padding: 16,
+    gap: 8,
+  },
+  recoverTitle: {
+    color: Colors.amber,
+    fontFamily: Fonts.heading,
+    fontSize: 14,
+    letterSpacing: 0,
+  },
+  recoverBody: {
+    color: Colors.text,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0,
+  },
+  recoverButtons: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  recoverSaveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.amber,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  recoverSaveText: {
+    color: Colors.textOnAmber,
+    fontFamily: Fonts.heading,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
+  recoverDiscardBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    justifyContent: "center",
+  },
+  recoverDiscardText: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
   content: {
     gap: 20
   },
 
-  // Header hero card
+  // Header hero card — no overflow:hidden (solid bg, nothing to clip)
   headerHero: {
     borderRadius: 26,
-    overflow: "hidden",
     paddingTop: 18,
     paddingBottom: 26,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     backgroundColor: Colors.navy
   },
 
-  // Header content row (sits on top of the gradient)
+  // Header content row
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between"
+  },
+  // flex:1 + paddingRight so text never crowds the badge/button
+  headerLeft: {
+    flex: 1,
+    paddingRight: 12
   },
   kicker: {
     color: Colors.textMuted,
@@ -353,12 +660,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 0
   },
-  logo: {
-    color: Colors.textBright,
-    fontSize: 48,
-    fontFamily: Fonts.black,
-    letterSpacing: 0,
-    lineHeight: 52
+  logoImage: {
+    width: 110,
+    height: 68,
   },
   tagline: {
     color: Colors.amber,
@@ -367,16 +671,46 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginTop: 2
   },
-  iconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+
+  // Lure change pill
+  lureChangePill: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 15,
     backgroundColor: Colors.field,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginTop: 4
+  },
+  lureChangePillText: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 12,
+    letterSpacing: 0,
+    maxWidth: 140,
+  },
+
+  // Sync status chip
+  syncChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: Colors.field,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  syncChipText: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 11,
+    letterSpacing: 0,
   },
 
   // Active trip: event row + stop
@@ -385,13 +719,20 @@ const styles = StyleSheet.create({
     gap: 10
   },
   stopButton: {
-    minHeight: 58,
-    borderRadius: 18,
+    height: 64,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 8,
-    backgroundColor: Colors.dangerSoft
+    gap: 10,
+    backgroundColor: Colors.dangerSoft,
+    borderWidth: 1.5,
+    borderColor: Colors.danger,
+    shadowColor: Colors.danger,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.38,
+    shadowRadius: 14,
+    elevation: 9,
   },
   stopText: {
     color: Colors.dangerText,
@@ -402,7 +743,7 @@ const styles = StyleSheet.create({
 
   // OVERBLIK
   overblikCard: {
-    borderRadius: 22,
+    borderRadius: 20,
     overflow: "hidden",
     backgroundColor: Colors.glassBg,
     borderWidth: 1,
@@ -430,22 +771,46 @@ const styles = StyleSheet.create({
   },
   counterValue: {
     color: Colors.textBright,
-    fontSize: 32,
+    fontSize: 48,
     fontFamily: Fonts.black,
-    letterSpacing: 0,
-    lineHeight: 36
+    letterSpacing: -1,
+    lineHeight: 54
   },
   counterLabel: {
     color: Colors.textMuted,
     fontSize: 10,
     fontFamily: Fonts.bodySemibold,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: "uppercase"
   },
   counterDivider: {
     width: 1,
     height: 40,
     backgroundColor: Colors.border
+  },
+
+  // Streak chips
+  streakRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  streakChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: Colors.field,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  streakChipText: {
+    color: Colors.text,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 12,
+    letterSpacing: 0,
   },
 
   // Welcome card
@@ -464,6 +829,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     fontFamily: Fonts.body
+  },
+  welcomeHint: {
+    color: Colors.amber,
+    fontSize: 13,
+    fontFamily: Fonts.bodySemibold,
+    letterSpacing: 0,
+    marginTop: 4
   },
 
   // SENESTE TURE
@@ -584,5 +956,81 @@ const styles = StyleSheet.create({
     color: Colors.textOnAmber,
     fontFamily: Fonts.heading,
     letterSpacing: 0
+  },
+  lurePicker: {
+    gap: 8
+  },
+  lurePickerLabel: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: Fonts.bodySemibold,
+    textTransform: "uppercase",
+    letterSpacing: 0
+  },
+  lurePickerRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  lureChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    backgroundColor: Colors.field
+  },
+  lureChipActive: {
+    backgroundColor: Colors.amber
+  },
+  lureChipText: {
+    color: Colors.text,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 13,
+    letterSpacing: 0,
+    maxWidth: 120
+  },
+  lureChipTextActive: {
+    color: Colors.textOnAmber
+  },
+
+  // Catch celebration
+  celebOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.catchGreen,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    zIndex: 99,
+  },
+  celebText: {
+    color: Colors.catchText,
+    fontFamily: Fonts.black,
+    fontSize: 36,
+    letterSpacing: 0,
+  },
+});
+
+const liveBadge = StyleSheet.create({
+  root: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.amber
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.textOnAmber
+  },
+  text: {
+    color: Colors.textOnAmber,
+    fontFamily: Fonts.black,
+    fontSize: 11,
+    letterSpacing: 1.5
   }
 });

@@ -10,38 +10,50 @@ type ActionButtonProps = {
   tone?: "green" | "yellow" | "red" | "steel" | "blue" | "catch";
   onPress: () => void;
   disabled?: boolean;
-  // Compact = smaller secondary button that can share a row of three equally
-  // (drops the 47% min width and uses a shorter height / tighter type).
   compact?: boolean;
 };
 
-// Brand tones:
-//  green  -> primary CTA (Start Fishing Trip) = amber, navy text
-//  yellow -> Contact = amber/gold, navy text
-//  blue   -> Following = blue, light text
-//  catch  -> New Catch = green, navy text
-//  red    -> destructive = red, light text (legacy)
-//  steel  -> secondary = dark teal, light text (legacy)
+// Gradient fills per tone.
 const tones = {
-  green: ["#FFC42E", "#E0A100"],
-  yellow: ["#FFD25A", "#E0A100"],
-  red: ["#FF6F61", "#9E2E32"],
-  steel: ["#21455A", "#16313F"],
-  blue: ["#3A86B0", "#23566F"],
-  catch: ["#3FB477", "#2C8459"]
-} as const;
+  green:  ["#FFC42E", "#E0A100"] as const,
+  yellow: ["#FFD25A", "#E0A100"] as const,
+  red:    ["#FF6F61", "#9E2E32"] as const,
+  steel:  ["#21455A", "#16313F"] as const,
+  blue:   ["#3A86B0", "#23566F"] as const,
+  catch:  [Colors.catchGreen, "#35B56A"] as const,
+};
 
+// Text / icon colour on top of each gradient.
 const foreground = {
-  green: Colors.textOnAmber,
+  green:  Colors.textOnAmber,
   yellow: Colors.textOnAmber,
-  red: "#FFE4E4",
-  steel: Colors.text,
-  blue: "#EAF4FA",
-  catch: "#06231A"
+  red:    "#FFE4E4",
+  steel:  Colors.text,
+  blue:   "#EAF4FA",
+  catch:  Colors.catchText,
 } as const;
 
-export function ActionButton({ label, icon, tone = "steel", onPress, disabled, compact }: ActionButtonProps) {
+// Glow colour applied as a drop-shadow under the button.
+const glowColor = {
+  green:  Colors.amber,
+  yellow: Colors.amber,
+  red:    Colors.danger,
+  steel:  "transparent",
+  blue:   "#3A86B0",
+  catch:  Colors.catchGreen,
+} as const;
+
+export function ActionButton({
+  label,
+  icon,
+  tone = "steel",
+  onPress,
+  disabled,
+  compact,
+}: ActionButtonProps) {
   const fg = foreground[tone];
+  const glow = glowColor[tone];
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -51,8 +63,11 @@ export function ActionButton({ label, icon, tone = "steel", onPress, disabled, c
       style={({ pressed }) => [
         styles.pressable,
         compact && styles.pressableCompact,
+        // Tonal glow shadow (iOS: shadowColor; Android: elevation).
+        { shadowColor: glow, shadowOffset: { width: 0, height: compact ? 8 : 5 },
+          shadowOpacity: 0.42, shadowRadius: compact ? 18 : 12, elevation: compact ? 12 : 8 },
         pressed && styles.pressed,
-        disabled && styles.disabled
+        disabled && styles.disabled,
       ]}
     >
       <LinearGradient
@@ -61,10 +76,25 @@ export function ActionButton({ label, icon, tone = "steel", onPress, disabled, c
         end={{ x: 1, y: 1 }}
         style={[styles.button, compact && styles.buttonCompact]}
       >
-        <View style={[styles.iconBubble, compact && styles.iconBubbleCompact]}>
-          <Ionicons name={icon} size={compact ? 22 : 25} color={fg} />
-        </View>
-        <Text style={[styles.label, compact && styles.labelCompact, { color: fg }]}>{label}</Text>
+        {compact ? (
+          // Compact: vertical card (icon top, label bottom)
+          <>
+            <View style={styles.iconBubbleCompact}>
+              <Ionicons name={icon} size={22} color={fg} />
+            </View>
+            <Text style={[styles.labelCompact, { color: fg }]}>{label}</Text>
+          </>
+        ) : (
+          // Full-width: horizontal pill (icon left, label right)
+          <>
+            <View style={styles.iconBubble}>
+              <Ionicons name={icon} size={26} color={fg} />
+            </View>
+            <Text style={[styles.label, { color: fg }]} numberOfLines={1}>
+              {label}
+            </Text>
+          </>
+        )}
       </LinearGradient>
     </Pressable>
   );
@@ -73,50 +103,68 @@ export function ActionButton({ label, icon, tone = "steel", onPress, disabled, c
 const styles = StyleSheet.create({
   pressable: {
     flex: 1,
-    minWidth: "47%"
+    minWidth: "47%",
   },
   pressableCompact: {
-    minWidth: 0
+    minWidth: 0,
   },
   pressed: {
     opacity: 0.82,
-    transform: [{ scale: 0.985 }]
+    transform: [{ scale: 0.985 }],
   },
   disabled: {
-    opacity: 0.42
+    opacity: 0.42,
   },
+
+  // ── Full-width pill (64px horizontal) ──
   button: {
-    minHeight: 112,
-    borderRadius: 24,
-    padding: 18,
-    justifyContent: "space-between",
-    overflow: "hidden"
-  },
-  buttonCompact: {
-    minHeight: 96,
-    borderRadius: 18,
-    padding: 12,
-    gap: 8
+    height: 64,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    overflow: "hidden",
   },
   iconBubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(13, 27, 42, 0.22)"
+    backgroundColor: "rgba(13, 27, 42, 0.22)",
+  },
+  label: {
+    flex: 1,
+    fontSize: 17,
+    fontFamily: Fonts.heading,
+    letterSpacing: 0,
+  },
+
+  // ── Compact vertical card ──
+  buttonCompact: {
+    height: undefined,
+    minHeight: 96,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
   iconBubbleCompact: {
     width: 38,
     height: 38,
-    borderRadius: 19
-  },
-  label: {
-    fontSize: 19,
-    fontFamily: Fonts.heading,
-    letterSpacing: 0
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(13, 27, 42, 0.22)",
   },
   labelCompact: {
-    fontSize: 13
-  }
+    fontSize: 13,
+    fontFamily: Fonts.heading,
+    letterSpacing: 0,
+    textAlign: "center",
+  },
 });

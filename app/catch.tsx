@@ -1,10 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Alert, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Animated, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Screen } from "@/components/Screen";
+import { getDb } from "@/database/db";
+import { getLures, type Lure } from "@/database/lures";
+import { LureColourDot } from "@/components/LureColourDot";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { formatWind } from "@/services/weather";
 import { useTranslation } from "@/i18n";
@@ -28,15 +32,44 @@ export default function CatchScreen() {
   const [speciesOpen, setSpeciesOpen] = useState(false);
   const [lengthCm, setLengthCm] = useState("");
   const [weightKg, setWeightKg] = useState("");
+  const [lures, setLures] = useState<Lure[]>([]);
+  const [selectedLureId, setSelectedLureId] = useState<string | null>(null);
+  const [lurePickerOpen, setLurePickerOpen] = useState(false);
+  const celebAnim = useRef(new Animated.Value(0)).current;
 
   // Refresh current conditions once when the catch screen opens (offline-safe).
   useEffect(() => {
     refreshWeather();
   }, [refreshWeather]);
 
-  const applyResult = (result: ImagePicker.ImagePickerResult) => {
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0]?.uri);
+  const activeLureId = activeTrip?.currentLureId;
+
+  useEffect(() => {
+    getDb()
+      .then(getLures)
+      .then((list) => {
+        setLures(list);
+        // Pre-fill with the trip's active lure; fall back to the starred favourite.
+        if (activeLureId && list.some((l) => l.id === activeLureId)) {
+          setSelectedLureId(activeLureId);
+        } else {
+          const fav = list.find((l) => l.isFavourite);
+          if (fav) setSelectedLureId(fav.id);
+        }
+      })
+      .catch(() => null);
+  }, [activeLureId]);
+
+  const applyResult = async (result: ImagePicker.ImagePickerResult) => {
+    if (result.canceled || !result.assets[0]?.uri) return;
+    const tempUri = result.assets[0].uri;
+    try {
+      // Copy to documentDirectory so the URI survives OS cache eviction and reinstalls.
+      const dest = `${FileSystem.documentDirectory}strike_catch_${Date.now()}.jpg`;
+      await FileSystem.copyAsync({ from: tempUri, to: dest });
+      setPhotoUri(dest);
+    } catch {
+      setPhotoUri(tempUri);
     }
   };
 
@@ -47,20 +80,18 @@ export default function CatchScreen() {
       aspect: [4, 3],
       quality: 0.82
     });
-    applyResult(result);
+    await applyResult(result);
   };
 
   const takePhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (permission.status !== "granted") {
-      return;
-    }
+    if (permission.status !== "granted") return;
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.82
     });
-    applyResult(result);
+    await applyResult(result);
   };
 
   // Offer camera or library via a native action sheet (cross-platform via Alert).
@@ -74,10 +105,7 @@ export default function CatchScreen() {
   };
 
   const saveCatch = async () => {
-    if (!activeTrip) {
-      return;
-    }
-
+    if (!activeTrip) return;
     const parsedLength = parseFloat(lengthCm);
     const parsedWeight = parseFloat(weightKg);
     addCatch({
@@ -87,10 +115,15 @@ export default function CatchScreen() {
       kept,
       position: currentLocation ?? undefined,
       lengthCm: isNaN(parsedLength) ? undefined : parsedLength,
-      weightKg: isNaN(parsedWeight) ? undefined : parsedWeight
+      weightKg: isNaN(parsedWeight) ? undefined : parsedWeight,
+      lureId: selectedLureId ?? undefined,
     });
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace("/map");
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Animated.sequence([
+      Animated.timing(celebAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(260),
+      Animated.timing(celebAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start(() => router.back());
   };
 
   if (!activeTrip) {
@@ -112,7 +145,7 @@ export default function CatchScreen() {
     <Screen>
       <Pressable style={styles.back} onPress={() => router.back()}>
         <Ionicons name="chevron-back" size={22} color={Colors.text} />
-        <Text style={styles.backText}>{t("common.map")}</Text>
+        <Text style={styles.backText}>{t("common.back")}</Text>
       </Pressable>
 
       <View>
@@ -181,6 +214,7 @@ export default function CatchScreen() {
           <View style={styles.photoEmpty}>
             <Ionicons name="camera-outline" size={32} color={Colors.text} />
             <Text style={styles.photoText}>{t("catch.addPhoto")}</Text>
+            <Text style={styles.photoOptional}>{t("catch.photoOptional")}</Text>
           </View>
         )}
       </Pressable>
@@ -201,6 +235,25 @@ export default function CatchScreen() {
           multiline
           style={styles.input}
         />
+
+        {lures.length > 0 ? (
+          <>
+            <Text style={styles.label}>{t("catch.lure")}</Text>
+            <Pressable style={styles.select} onPress={() => setLurePickerOpen(true)}>
+              <View style={styles.selectInner}>
+                <LureColourDot
+                  colourKey={lures.find((l) => l.id === selectedLureId)?.colour}
+                  colourSecondaryKey={lures.find((l) => l.id === selectedLureId)?.colourSecondary}
+                  size={14}
+                />
+                <Text style={styles.selectText}>
+                  {lures.find((l) => l.id === selectedLureId)?.name ?? t("catch.noLure")}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={18} color={Colors.text} />
+            </Pressable>
+          </>
+        ) : null}
 
         <View style={styles.measureRow}>
           <View style={styles.measureField}>
@@ -262,6 +315,51 @@ export default function CatchScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <Modal visible={lurePickerOpen} transparent animationType="fade" onRequestClose={() => setLurePickerOpen(false)}>
+        <Pressable style={styles.modalScrim} onPress={() => setLurePickerOpen(false)}>
+          <View style={styles.modalCard}>
+            <Pressable
+              style={styles.option}
+              onPress={() => {
+                setSelectedLureId(null);
+                setLurePickerOpen(false);
+              }}
+            >
+              <Text style={styles.optionText}>{t("catch.noLure")}</Text>
+              {selectedLureId === null ? <Ionicons name="checkmark" size={20} color={Colors.amber} /> : null}
+            </Pressable>
+            {lures.map((lure) => (
+              <Pressable
+                key={lure.id}
+                style={styles.option}
+                onPress={() => {
+                  setSelectedLureId(lure.id);
+                  setLurePickerOpen(false);
+                }}
+              >
+                <View style={styles.lureOptionRow}>
+                  {lure.isFavourite ? (
+                    <Ionicons name="star" size={14} color={Colors.amber} style={styles.lureOptionStar} />
+                  ) : null}
+                  <LureColourDot colourKey={lure.colour} colourSecondaryKey={lure.colourSecondary} size={12} />
+                  <Text style={[styles.optionText, lure.colour ? styles.lureOptionNameGap : null]}>
+                    {lure.name}
+                  </Text>
+                </View>
+                {lure.id === selectedLureId ? <Ionicons name="checkmark" size={20} color={Colors.amber} /> : null}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+      <Animated.View
+        style={[styles.celebOverlay, { opacity: celebAnim }]}
+        pointerEvents="none"
+      >
+        <Ionicons name="fish-outline" size={72} color={Colors.navy} />
+        <Text style={styles.celebSpecies}>{selectedSpecies}</Text>
+      </Animated.View>
     </Screen>
   );
 }
@@ -345,6 +443,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 0
   },
+  photoOptional: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    letterSpacing: 0
+  },
   form: {
     gap: 10
   },
@@ -422,37 +526,6 @@ const styles = StyleSheet.create({
   toggleTextActive: {
     color: Colors.textOnAmber
   },
-  privacyGroup: {
-    gap: 10
-  },
-  privacyOption: {
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 3,
-    backgroundColor: Colors.field
-  },
-  privacyOptionActive: {
-    backgroundColor: Colors.amber
-  },
-  privacyTitle: {
-    color: Colors.textBright,
-    fontFamily: Fonts.heading,
-    fontSize: 15,
-    letterSpacing: 0
-  },
-  privacyTitleActive: {
-    color: Colors.textOnAmber
-  },
-  privacySubtitle: {
-    color: Colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: Fonts.body
-  },
-  privacySubtitleActive: {
-    color: "#5A4400"
-  },
   save: {
     height: 62,
     borderRadius: 20,
@@ -499,5 +572,37 @@ const styles = StyleSheet.create({
   empty: {
     gap: 8,
     paddingTop: 40
-  }
+  },
+  selectInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  lureOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  lureOptionStar: {
+    marginRight: 2,
+  },
+  lureOptionNameGap: {
+    marginLeft: 2,
+  },
+  celebOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.catchGreen,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    zIndex: 99,
+  },
+  celebSpecies: {
+    color: Colors.catchText,
+    fontFamily: Fonts.black,
+    fontSize: 36,
+    letterSpacing: 0,
+  },
 });

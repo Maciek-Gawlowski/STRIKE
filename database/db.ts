@@ -13,7 +13,14 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = (async () => {
       const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
-      await migrate(db);
+      try {
+        await migrate(db);
+      } catch (error) {
+        // A migration failure must not brick the singleton — the app must remain
+        // usable (schema is best-effort for existing columns; new ones may be
+        // absent but no crash on launch).
+        console.warn("[strike/db] migration error (continuing)", error);
+      }
       return db;
     })();
   }

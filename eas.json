@@ -1,14 +1,33 @@
 {
-  "cli": { "version": ">= 5.0.0" },
+  "cli": {
+    "version": ">= 5.0.0"
+  },
   "build": {
-    "preview": {
+    "development": {
+      "developmentClient": true,
       "distribution": "internal",
+      "credentialsSource": "local",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "distribution": "store",
+      "credentialsSource": "local",
       "ios": {
         "simulator": false
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6782589072",
+        "appleTeamId": "4GF86LVVA7",
+        "ascApiKeyPath": "./asc-api-key.p8",
+        "ascApiKeyId": "6T586Y4N6D",
+        "ascApiKeyIssuerId": "459289f1-3a32-419e-aa06-09bca1b065b1"
+      }
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { latLngToCell } from "@/services/hexGrid";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 /**
@@ -25,20 +26,39 @@ import type { SQLiteDatabase } from "expo-sqlite";
  *         area-level: any 'exact' privacy_level becomes 'zone'.
  *   v5 -> events.length_cm and events.weight_kg added (both REAL NULL).
  *         Optional — nobody weighs a catch-and-release fish on the spot.
+ *   v6 -> lures table (id, name, is_favourite, created_at), profile table
+ *         (single-row, id=1), and events.lure_id (nullable TEXT FK to lures).
+ *   v7 -> lures.colour TEXT NULL — stores a lure-palette token key (e.g. "lureGreen").
+ *   v8 -> lures.colour_secondary TEXT NULL — optional second tone for two-colour lures.
+ *         NOTE: v8 was originally numbered before v9 was written, causing a migration
+ *         ordering bug. The fix is v10 below — do NOT change or remove v8.
+ *   v9 -> events.h3_cell TEXT NULL — H3 resolution-8 cell index computed from lat/lng.
+ *         Backfills existing rows. Used by the Bite Map instead of hardcoded zone_id.
+ *  v10 -> lures.colour_secondary re-applied for devices that received v9 before v8
+ *         (i.e. devices that already have user_version=9 and missed the v8 block).
+ *         Guarded by columnExists — safe to run even if the column already exists.
+ *  v11 -> Re-backfill events.h3_cell. v9 wrote old H3 library ids ("88754e6499fffff"
+ *         format); the replacement pure-JS grid writes "q,r" format. The two formats
+ *         never match, so all v9 cells are cleared and recomputed. Invalid coords
+ *         (null/NaN) are skipped; one bad row cannot abort the rest.
+ *  v12 -> spots table: private, device-only saved locations. Never uploaded or
+ *         included in Bite Map aggregation. Created via CREATE TABLE IF NOT EXISTS
+ *         in the initial block; this version just stamps the counter.
  */
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 16;
 
 export const CREATE_TRIPS_TABLE = `
   CREATE TABLE IF NOT EXISTS trips (
-    id          TEXT PRIMARY KEY NOT NULL,
-    name        TEXT,
-    start_time  TEXT NOT NULL,
-    end_time    TEXT,
-    distance    REAL NOT NULL DEFAULT 0,
-    duration    INTEGER,
-    steps       INTEGER NOT NULL DEFAULT 0,
-    route_json  TEXT NOT NULL DEFAULT '[]'
+    id               TEXT PRIMARY KEY NOT NULL,
+    name             TEXT,
+    start_time       TEXT NOT NULL,
+    end_time         TEXT,
+    distance         REAL NOT NULL DEFAULT 0,
+    duration         INTEGER,
+    steps            INTEGER NOT NULL DEFAULT 0,
+    route_json       TEXT NOT NULL DEFAULT '[]',
+    current_lure_id  TEXT
   );
 `;
 
@@ -57,7 +77,29 @@ export const CREATE_EVENTS_TABLE = `
     sync_status  TEXT NOT NULL DEFAULT 'pending',
     length_cm    REAL,
     weight_kg    REAL,
+    lure_id      TEXT,
+    h3_cell      TEXT,
     FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
+  );
+`;
+
+export const CREATE_LURES_TABLE = `
+  CREATE TABLE IF NOT EXISTS lures (
+    id               TEXT PRIMARY KEY NOT NULL,
+    name             TEXT NOT NULL,
+    is_favourite     INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT NOT NULL,
+    colour           TEXT,
+    colour_secondary TEXT
+  );
+`;
+
+export const CREATE_PROFILE_TABLE = `
+  CREATE TABLE IF NOT EXISTS profile (
+    id                INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
+    display_name      TEXT,
+    fishing_type      TEXT,
+    preferred_species TEXT
   );
 `;
 
@@ -74,10 +116,42 @@ export const CREATE_WEATHER_SNAPSHOTS_TABLE = `
   );
 `;
 
+export const CREATE_SPOTS_TABLE = `
+  CREATE TABLE IF NOT EXISTS spots (
+    id         TEXT PRIMARY KEY NOT NULL,
+    name       TEXT NOT NULL,
+    lat        REAL NOT NULL,
+    lng        REAL NOT NULL,
+    note       TEXT,
+    created_at TEXT NOT NULL
+  );
+`;
+
+export const CREATE_BITE_MAP_DELETE_QUEUE_TABLE = `
+  CREATE TABLE IF NOT EXISTS bite_map_delete_queue (
+    local_event_id TEXT PRIMARY KEY NOT NULL,
+    queued_at      TEXT NOT NULL
+  );
+`;
+
+export const CREATE_FEEDBACK_QUEUE_TABLE = `
+  CREATE TABLE IF NOT EXISTS feedback_queue (
+    id            TEXT PRIMARY KEY NOT NULL,
+    message       TEXT NOT NULL,
+    app_version   TEXT NOT NULL,
+    build_number  TEXT NOT NULL,
+    platform      TEXT NOT NULL,
+    device_model  TEXT NOT NULL,
+    local_user_id TEXT NOT NULL,
+    queued_at     TEXT NOT NULL
+  );
+`;
+
 export const CREATE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_events_trip_id ON events (trip_id);
   CREATE INDEX IF NOT EXISTS idx_events_sync_status ON events (sync_status);
   CREATE INDEX IF NOT EXISTS idx_weather_event_id ON weather_snapshots (event_id);
+  CREATE INDEX IF NOT EXISTS idx_spots_created_at ON spots (created_at);
 `;
 
 /** Returns true if `column` already exists on `table`. */
@@ -101,6 +175,11 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     ${CREATE_TRIPS_TABLE}
     ${CREATE_EVENTS_TABLE}
     ${CREATE_WEATHER_SNAPSHOTS_TABLE}
+    ${CREATE_LURES_TABLE}
+    ${CREATE_PROFILE_TABLE}
+    ${CREATE_SPOTS_TABLE}
+    ${CREATE_BITE_MAP_DELETE_QUEUE_TABLE}
+    ${CREATE_FEEDBACK_QUEUE_TABLE}
     ${CREATE_INDEXES}
   `);
 
@@ -149,6 +228,141 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       await db.execAsync("ALTER TABLE events ADD COLUMN weight_kg REAL;");
     }
     current = 5;
+  }
+
+  // v6: lures + profile tables, plus events.lure_id (nullable FK to lures).
+  if (current < 6) {
+    // Tables are already created above via CREATE TABLE IF NOT EXISTS; only the
+    // new column on events needs an ALTER for existing installs.
+    if (!(await columnExists(db, "events", "lure_id"))) {
+      await db.execAsync("ALTER TABLE events ADD COLUMN lure_id TEXT;");
+    }
+    current = 6;
+  }
+
+  // v7: lures.colour — token key for the lure-palette colour (nullable).
+  if (current < 7) {
+    if (!(await columnExists(db, "lures", "colour"))) {
+      await db.execAsync("ALTER TABLE lures ADD COLUMN colour TEXT;");
+    }
+    current = 7;
+  }
+
+  // v8: lures.colour_secondary — optional second tone for two-colour lures.
+  if (current < 8) {
+    if (!(await columnExists(db, "lures", "colour_secondary"))) {
+      await db.execAsync("ALTER TABLE lures ADD COLUMN colour_secondary TEXT;");
+    }
+    current = 8;
+  }
+
+  // v9: events.h3_cell — H3 resolution-8 cell index. Backfill existing rows
+  // by computing the cell from their stored lat/lng. Rows with invalid coords are
+  // skipped; one bad row cannot abort the migration.
+  if (current < 9) {
+    if (!(await columnExists(db, "events", "h3_cell"))) {
+      await db.execAsync("ALTER TABLE events ADD COLUMN h3_cell TEXT;");
+    }
+    const rows = await db.getAllAsync<{ id: string; lat: number | null; lng: number | null }>(
+      "SELECT id, lat, lng FROM events WHERE h3_cell IS NULL;"
+    );
+    for (const row of rows) {
+      if (row.lat == null || row.lng == null || !isFinite(row.lat) || !isFinite(row.lng)) continue;
+      try {
+        const cell = latLngToCell(row.lat, row.lng);
+        await db.runAsync("UPDATE events SET h3_cell = ? WHERE id = ?;", [cell, row.id]);
+      } catch {
+        // Bad coordinate — leave h3_cell NULL for this row; Bite Map ignores it.
+      }
+    }
+    current = 9;
+  }
+
+  // v10: re-apply lures.colour_secondary for devices that were already at v9
+  // before v8 was authored, and therefore skipped the v8 block entirely.
+  if (current < 10) {
+    if (!(await columnExists(db, "lures", "colour_secondary"))) {
+      await db.execAsync("ALTER TABLE lures ADD COLUMN colour_secondary TEXT;");
+    }
+    current = 10;
+  }
+
+  // v11: clear old H3 library cell ids ("88754e6499fffff" format) and re-backfill
+  // using the pure-JS grid ("q,r" format). The two formats never match, so any row
+  // written by v9 must be recomputed. Rows with invalid coords are skipped.
+  if (current < 11) {
+    await db.execAsync("UPDATE events SET h3_cell = NULL;");
+    const rows = await db.getAllAsync<{ id: string; lat: number | null; lng: number | null }>(
+      "SELECT id, lat, lng FROM events WHERE lat IS NOT NULL AND lng IS NOT NULL;"
+    );
+    for (const row of rows) {
+      if (row.lat == null || row.lng == null || !isFinite(row.lat) || !isFinite(row.lng)) continue;
+      try {
+        const cell = latLngToCell(row.lat, row.lng);
+        await db.runAsync("UPDATE events SET h3_cell = ? WHERE id = ?;", [cell, row.id]);
+      } catch {
+        // Bad coordinate — leave h3_cell NULL for this row.
+      }
+    }
+    current = 11;
+  }
+
+  // v12: spots table (private, device-only saved locations). The table is created
+  // by CREATE TABLE IF NOT EXISTS in the initial block above; nothing to ALTER.
+  if (current < 12) {
+    current = 12;
+  }
+
+  // v13: bite_map_delete_queue table. Persists local_event_id values whose
+  // Supabase DELETE failed (offline) so flushBiteMapDeleteQueue() can retry on
+  // the next app start. Table is created via CREATE TABLE IF NOT EXISTS above.
+  if (current < 13) {
+    current = 13;
+  }
+
+  // v14: feedback_queue table. Caches alpha-tester feedback that failed to
+  // insert to Supabase (offline). Retried by flushFeedbackQueue() on next start.
+  if (current < 14) {
+    current = 14;
+  }
+
+  // v15: trips.current_lure_id — the lure selected at trip start (and changeable
+  // mid-trip). Stamped onto every event's lure_id so contacts/follows record it.
+  if (current < 15) {
+    if (!(await columnExists(db, "trips", "current_lure_id"))) {
+      await db.execAsync("ALTER TABLE trips ADD COLUMN current_lure_id TEXT;");
+    }
+    current = 15;
+  }
+
+  // v16: extended profile fields.
+  //   fishing_type repurposed: was a single key ("kyst"), now JSON array of method keys.
+  //   New columns: water_type, fishing_locations (JSON), photo_uri, gear (JSON).
+  if (current < 16) {
+    const rows = await db.getAllAsync<{ id: number; fishing_type: string | null }>(
+      "SELECT id, fishing_type FROM profile;"
+    );
+    for (const row of rows) {
+      if (row.fishing_type && !row.fishing_type.startsWith("[")) {
+        await db.runAsync("UPDATE profile SET fishing_type = ? WHERE id = ?;", [
+          JSON.stringify([row.fishing_type]),
+          row.id,
+        ]);
+      }
+    }
+    if (!(await columnExists(db, "profile", "water_type"))) {
+      await db.execAsync("ALTER TABLE profile ADD COLUMN water_type TEXT;");
+    }
+    if (!(await columnExists(db, "profile", "fishing_locations"))) {
+      await db.execAsync("ALTER TABLE profile ADD COLUMN fishing_locations TEXT;");
+    }
+    if (!(await columnExists(db, "profile", "photo_uri"))) {
+      await db.execAsync("ALTER TABLE profile ADD COLUMN photo_uri TEXT;");
+    }
+    if (!(await columnExists(db, "profile", "gear"))) {
+      await db.execAsync("ALTER TABLE profile ADD COLUMN gear TEXT;");
+    }
+    current = 16;
   }
 
   if (current !== SCHEMA_VERSION) {

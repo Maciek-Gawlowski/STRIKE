@@ -15,12 +15,15 @@ const STATION_ID = "26457"; // Fynshav Havn I — on Als, has sealev_dvr
 const TIMEOUT_MS = 3000;
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const TREND_THRESHOLD_CM = 2;
+const PHASE_RANGE_THRESHOLD_CM = 4; // minimum range to detect high/low tide
 
 export type WaterLevelTrend = "rising" | "falling" | "stable";
+export type TidalPhase = "flooding" | "ebbing" | "highTide" | "lowTide";
 
 export type WaterLevelData = {
   level: number; // cm, relative to DVR90 datum
   trend: WaterLevelTrend;
+  phase: TidalPhase;
   timestamp: string; // ISO 8601 of the latest reading
 };
 
@@ -56,13 +59,13 @@ export async function getWaterLevel(): Promise<WaterLevelData | null> {
 
 function buildUrl(): string {
   const now = new Date();
-  const start = new Date(now.getTime() - 3 * 60 * 60 * 1000); // last 3 hours
+  const start = new Date(now.getTime() - 6 * 60 * 60 * 1000); // last 6 hours
   const datetime = `${start.toISOString()}/${now.toISOString()}`;
   return (
     `${DMI_URL}?stationId=${STATION_ID}` +
     `&parameterId=sealev_dvr` +
     `&datetime=${encodeURIComponent(datetime)}` +
-    `&limit=30`
+    `&limit=60`
   );
 }
 
@@ -89,6 +92,25 @@ function extractReadings(
     }
   }
   return readings;
+}
+
+function computePhase(readings: { time: number; cm: number }[], trend: WaterLevelTrend): TidalPhase {
+  if (readings.length < 3) {
+    return trend === "rising" ? "flooding" : "ebbing";
+  }
+  const values = readings.map((r) => r.cm);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min;
+  if (range < PHASE_RANGE_THRESHOLD_CM) {
+    return trend === "rising" ? "flooding" : "ebbing";
+  }
+  const sorted = [...readings].sort((a, b) => a.time - b.time);
+  const latest = sorted[sorted.length - 1];
+  const normalised = (latest.cm - min) / range;
+  if (normalised >= 0.85) return "highTide";
+  if (normalised <= 0.15) return "lowTide";
+  return trend === "rising" ? "flooding" : "ebbing";
 }
 
 function computeTrend(readings: { time: number; cm: number }[]): WaterLevelTrend {
@@ -118,7 +140,6 @@ function computeTrend(readings: { time: number; cm: number }[]): WaterLevelTrend
 
 async function fetchWaterLevel(): Promise<WaterLevelData | null> {
   const url = buildUrl();
-  console.log("[dmi] fetching:", url);
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -129,23 +150,17 @@ async function fetchWaterLevel(): Promise<WaterLevelData | null> {
       clearTimeout(timer);
     }
 
-    console.log("[dmi] status:", response.status);
     if (!response.ok) {
-      const body = await response.text().catch(() => "(unreadable)");
-      console.log("[dmi] error body:", body);
       return null;
     }
 
     const text = await response.text();
-    console.log("[dmi] response body (first 500 chars):", text.slice(0, 500));
     const data = JSON.parse(text) as DmiCollection;
     if (data?.type !== "FeatureCollection") {
-      console.log("[dmi] unexpected type:", data?.type);
       return null;
     }
 
     const readings = extractReadings(data);
-    console.log("[dmi] readings extracted:", readings.length);
     if (readings.length === 0) {
       return null;
     }
@@ -153,9 +168,11 @@ async function fetchWaterLevel(): Promise<WaterLevelData | null> {
     const sorted = [...readings].sort((a, b) => b.time - a.time);
     const latest = sorted[0];
 
+    const trend = computeTrend(readings);
     return {
       level: Math.round(latest.cm),
-      trend: computeTrend(readings),
+      trend,
+      phase: computePhase(readings, trend),
       timestamp: new Date(latest.time).toISOString()
     };
   } catch {

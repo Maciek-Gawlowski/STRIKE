@@ -47,7 +47,22 @@ export const Colors = {
   activityNone: "#5A6B78",
   activityLow: "#4CAF7D",
   activityMid: "#F4C84F",
-  activityHigh: "#F45B5B"
+  activityHigh: "#F45B5B",
+
+  // Lure colour palette — stored as token keys in the DB, resolved to hex for display
+  lureGreen:  "#3DAA6A",
+  lureBlue:   "#3A7FC1",
+  lureRed:    "#D94040",
+  lureSilver: "#A8B4BC",
+  lureGold:   "#D4A017",
+  lureBlack:  "#2B2B2B",
+  lureWhite:  "#E8EAE6",
+  lurePink:   "#D96FA0",
+  lureOrange: "#E07030",
+  lureBrown:  "#7A4E2D",
+
+  catchGreen: "#52E090",
+  catchText:  "#06231A",
 } as const;
 
 export type ColorName = keyof typeof Colors;

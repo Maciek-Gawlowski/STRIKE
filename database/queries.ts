@@ -1,3 +1,4 @@
+import { latLngToCell } from "@/services/hexGrid";
 import type { SQLiteDatabase } from "expo-sqlite";
 import type { Coordinate, StrikeEvent, StrikeEventType, Trip } from "@/store/useStrikeStore";
 
@@ -18,6 +19,7 @@ type TripRow = {
   duration: number | null;
   steps: number;
   route_json: string;
+  current_lure_id: string | null;
 };
 
 type EventRow = {
@@ -35,6 +37,8 @@ type EventRow = {
   privacy_level: string | null;
   length_cm: number | null;
   weight_kg: number | null;
+  lure_id: string | null;
+  h3_cell: string | null;
 };
 
 export type WeatherSnapshot = {
@@ -72,7 +76,8 @@ function rowToEvent(row: EventRow): StrikeEvent {
     comment: row.comment ?? undefined,
     kept,
     lengthCm: row.length_cm ?? undefined,
-    weightKg: row.weight_kg ?? undefined
+    weightKg: row.weight_kg ?? undefined,
+    lureId: row.lure_id ?? undefined,
   };
 }
 
@@ -85,7 +90,8 @@ function rowToTrip(row: TripRow, events: StrikeEvent[]): Trip {
     route: parseRoute(row.route_json),
     events,
     distanceMeters: row.distance,
-    steps: row.steps
+    steps: row.steps,
+    currentLureId: row.current_lure_id ?? undefined
   };
 }
 
@@ -112,8 +118,8 @@ function keptToReleased(kept: boolean | undefined): number | null {
  */
 export async function upsertTrip(db: SQLiteDatabase, trip: Trip): Promise<void> {
   await db.runAsync(
-    `INSERT INTO trips (id, name, start_time, end_time, distance, duration, steps, route_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO trips (id, name, start_time, end_time, distance, duration, steps, route_json, current_lure_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        start_time = excluded.start_time,
@@ -121,7 +127,8 @@ export async function upsertTrip(db: SQLiteDatabase, trip: Trip): Promise<void> 
        distance = excluded.distance,
        duration = excluded.duration,
        steps = excluded.steps,
-       route_json = excluded.route_json;`,
+       route_json = excluded.route_json,
+       current_lure_id = excluded.current_lure_id;`,
     [
       trip.id,
       trip.title,
@@ -130,9 +137,14 @@ export async function upsertTrip(db: SQLiteDatabase, trip: Trip): Promise<void> 
       trip.distanceMeters,
       durationSeconds(trip),
       trip.steps,
-      JSON.stringify(trip.route)
+      JSON.stringify(trip.route),
+      trip.currentLureId ?? null
     ]
   );
+}
+
+export async function updateTripLure(db: SQLiteDatabase, tripId: string, lureId: string | null): Promise<void> {
+  await db.runAsync("UPDATE trips SET current_lure_id = ? WHERE id = ?;", [lureId, tripId]);
 }
 
 // --- Event writes -----------------------------------------------------------
@@ -141,11 +153,13 @@ export async function upsertEvent(
   db: SQLiteDatabase,
   tripId: string,
   event: StrikeEvent,
+  h3Cell?: string,
   syncStatus: "pending" | "synced" = "pending"
 ): Promise<void> {
+  const cell = h3Cell ?? latLngToCell(event.position.latitude, event.position.longitude);
   await db.runAsync(
-    `INSERT INTO events (id, trip_id, type, timestamp, lat, lng, photo_uri, species, comment, released, sync_status, privacy_level, length_cm, weight_kg)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO events (id, trip_id, type, timestamp, lat, lng, photo_uri, species, comment, released, sync_status, privacy_level, length_cm, weight_kg, lure_id, h3_cell)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        trip_id = excluded.trip_id,
        type = excluded.type,
@@ -159,7 +173,9 @@ export async function upsertEvent(
        sync_status = excluded.sync_status,
        privacy_level = excluded.privacy_level,
        length_cm = excluded.length_cm,
-       weight_kg = excluded.weight_kg;`,
+       weight_kg = excluded.weight_kg,
+       lure_id = excluded.lure_id,
+       h3_cell = excluded.h3_cell;`,
     [
       event.id,
       tripId,
@@ -172,10 +188,11 @@ export async function upsertEvent(
       event.comment ?? null,
       keptToReleased(event.kept),
       syncStatus,
-      // Privacy collapsed to area-level only; the column stays 'zone' for every row.
       "zone",
       event.lengthCm ?? null,
-      event.weightKg ?? null
+      event.weightKg ?? null,
+      event.lureId ?? null,
+      cell,
     ]
   );
 }
@@ -222,6 +239,89 @@ export async function getActiveTrip(db: SQLiteDatabase): Promise<Trip | null> {
     "SELECT * FROM trips WHERE end_time IS NULL ORDER BY start_time DESC LIMIT 1;"
   );
   return row ? hydrateTrip(db, row) : null;
+}
+
+export async function deleteTrip(db: SQLiteDatabase, tripId: string): Promise<void> {
+  // ON DELETE CASCADE on events + weather_snapshots handles child rows.
+  await db.runAsync("DELETE FROM trips WHERE id = ?;", [tripId]);
+}
+
+export async function deleteEvent(db: SQLiteDatabase, eventId: string): Promise<void> {
+  // ON DELETE CASCADE on weather_snapshots handles the child row.
+  await db.runAsync("DELETE FROM events WHERE id = ?;", [eventId]);
+}
+
+export async function renameTripInDb(db: SQLiteDatabase, tripId: string, name: string): Promise<void> {
+  await db.runAsync("UPDATE trips SET name = ? WHERE id = ?;", [name, tripId]);
+}
+
+export async function queueBiteMapDelete(db: SQLiteDatabase, eventIds: string[]): Promise<void> {
+  const now = new Date().toISOString();
+  for (const eventId of eventIds) {
+    await db.runAsync(
+      "INSERT OR IGNORE INTO bite_map_delete_queue (local_event_id, queued_at) VALUES (?, ?);",
+      [eventId, now]
+    );
+  }
+}
+
+export async function getBiteMapDeleteQueue(db: SQLiteDatabase): Promise<string[]> {
+  const rows = await db.getAllAsync<{ local_event_id: string }>(
+    "SELECT local_event_id FROM bite_map_delete_queue;"
+  );
+  return rows.map((r) => r.local_event_id);
+}
+
+export async function clearBiteMapDeleteQueue(db: SQLiteDatabase, eventIds: string[]): Promise<void> {
+  for (const eventId of eventIds) {
+    await db.runAsync("DELETE FROM bite_map_delete_queue WHERE local_event_id = ?;", [eventId]);
+  }
+}
+
+// --- Feedback queue ---------------------------------------------------------
+
+export type FeedbackData = {
+  id: string;
+  message: string;
+  appVersion: string;
+  buildNumber: string;
+  platform: string;
+  deviceModel: string;
+  localUserId: string;
+};
+
+export async function queueFeedback(db: SQLiteDatabase, row: FeedbackData): Promise<void> {
+  await db.runAsync(
+    `INSERT OR IGNORE INTO feedback_queue
+       (id, message, app_version, build_number, platform, device_model, local_user_id, queued_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+    [row.id, row.message, row.appVersion, row.buildNumber, row.platform, row.deviceModel, row.localUserId, new Date().toISOString()]
+  );
+}
+
+export async function getFeedbackQueue(db: SQLiteDatabase): Promise<FeedbackData[]> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    message: string;
+    app_version: string;
+    build_number: string;
+    platform: string;
+    device_model: string;
+    local_user_id: string;
+  }>("SELECT * FROM feedback_queue;");
+  return rows.map((r) => ({
+    id: r.id,
+    message: r.message,
+    appVersion: r.app_version,
+    buildNumber: r.build_number,
+    platform: r.platform,
+    deviceModel: r.device_model,
+    localUserId: r.local_user_id
+  }));
+}
+
+export async function clearFeedbackQueueItem(db: SQLiteDatabase, id: string): Promise<void> {
+  await db.runAsync("DELETE FROM feedback_queue WHERE id = ?;", [id]);
 }
 
 export async function countTrips(db: SQLiteDatabase): Promise<number> {

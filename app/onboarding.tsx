@@ -27,7 +27,8 @@ type Slide = {
 const SLIDES: Slide[] = [
   { icon: "navigate-circle-outline", titleKey: "onboarding.slide1Title", descKey: "onboarding.slide1Desc" },
   { icon: "flash-outline", titleKey: "onboarding.slide2Title", descKey: "onboarding.slide2Desc" },
-  { icon: "map-outline", titleKey: "onboarding.slide3Title", descKey: "onboarding.slide3Desc" }
+  { icon: "lock-closed-outline", titleKey: "onboarding.slide3Title", descKey: "onboarding.slide3Desc" },
+  { icon: "checkmark-circle-outline", titleKey: "onboarding.slide4Title", descKey: "onboarding.slide4Desc" }
 ];
 
 export default function OnboardingScreen() {

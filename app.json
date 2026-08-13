@@ -13,18 +13,20 @@
     },
     "ios": {
       "bundleIdentifier": "com.strikeangler.app",
-      "buildNumber": "1",
+      "buildNumber": "15",
       "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "STRIKE uses your position to draw the fishing route and tag contacts, lost fish, and catches.",
-        "NSPhotoLibraryUsageDescription": "STRIKE lets you attach catch photos to your trip log."
+        "NSPhotoLibraryUsageDescription": "STRIKE lets you attach catch photos to your trip log.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "READ_MEDIA_IMAGES"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -38,8 +40,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
-      }
+        "projectId": "5dfd2ff0-ae12-4767-b6f0-f9e96466dde2"
+      },
+      "router": {}
     }
   }
 }

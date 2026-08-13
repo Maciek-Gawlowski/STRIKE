@@ -1,29 +1,38 @@
 import { create } from "zustand";
 import { enqueueWrite, getDb } from "@/database/db";
 import {
+  deleteEvent,
+  deleteTrip,
   getActiveTrip,
   getCompletedTrips,
+  insertWeatherSnapshot,
+  queueBiteMapDelete,
+  renameTripInDb,
   saveTripWithEvents,
+  updateTripLure,
   upsertEvent,
-  upsertTrip
+  upsertTrip,
+  type WeatherSnapshot,
 } from "@/database/queries";
 import { hasSeeded, loadAppState, markSeeded, saveAppState } from "@/database/preferences";
 import {
-  captureWeatherForEvent,
   fetchWeather,
   syncPendingWeather,
   type WeatherData
 } from "@/services/weather";
-import { uploadBiteMapEvent } from "@/services/biteMap";
-import { detectZone } from "@/services/zones";
+import { deleteBiteMapEvents, flushBiteMapDeleteQueue, resyncBiteMapEvent, uploadBiteMapEvent } from "@/services/biteMap";
+import { flushFeedbackQueue } from "@/services/feedback";
+import { latLngToCell } from "@/services/hexGrid";
+import { storeWeatherForEvent } from "@/services/weather";
 import { getWaterLevel, type WaterLevelData } from "@/services/dmi";
+import type { MapType } from "@/database/preferences";
 
 export type Coordinate = {
   latitude: number;
   longitude: number;
 };
 
-export type StrikeEventType = "contact" | "following" | "catch";
+export type StrikeEventType = "contact" | "following" | "catch" | "lure";
 
 export type StrikeEvent = {
   id: string;
@@ -36,6 +45,7 @@ export type StrikeEvent = {
   kept?: boolean;
   lengthCm?: number;
   weightKg?: number;
+  lureId?: string;
 };
 
 export type Trip = {
@@ -47,6 +57,7 @@ export type Trip = {
   events: StrikeEvent[];
   distanceMeters: number;
   steps: number;
+  currentLureId?: string;
 };
 
 type StrikeState = {
@@ -57,9 +68,13 @@ type StrikeState = {
   locationSource: "gps" | "mock";
   weather: WeatherData | null;
   waterLevel: WaterLevelData | null;
+  mapType: MapType;
+  recoveredStaleTrip: Trip | null;
   refreshWeather: (position?: Coordinate) => void;
   refreshWaterLevel: () => void;
-  startTrip: (position?: Coordinate, source?: "gps" | "mock", title?: string) => void;
+  startTrip: (position?: Coordinate, source?: "gps" | "mock", title?: string, lureId?: string) => void;
+  setActiveLure: (lureId: string | null) => void;
+  changeLure: (lureId: string | null, lureName: string) => void;
   stopTrip: () => Trip | null;
   setCurrentLocation: (position: Coordinate, source?: "gps" | "mock") => void;
   appendRoutePoint: (position: Coordinate, source?: "gps" | "mock") => void;
@@ -72,7 +87,23 @@ type StrikeState = {
     position?: Coordinate;
     lengthCm?: number;
     weightKg?: number;
+    lureId?: string;
   }) => StrikeEvent | null;
+  setMapType: (type: MapType) => void;
+  saveRecoveredTrip: () => void;
+  discardRecoveredTrip: () => void;
+  deleteCompletedTrip: (tripId: string) => void;
+  removeEvent: (tripId: string, eventId: string) => void;
+  renameTrip: (tripId: string, name: string) => void;
+  updateEvent: (
+    tripId: string,
+    updatedEvent: StrikeEvent,
+    opts?: {
+      weatherPatch?: Partial<WeatherSnapshot>;
+      existingWeather?: WeatherSnapshot | null;
+      resyncBiteMap?: boolean;
+    }
+  ) => void;
 };
 
 const demoStart: Coordinate = {
@@ -170,6 +201,32 @@ const fallbackPoint = (state: StrikeState) => {
   };
 };
 
+// ── Route-flush debounce ─────────────────────────────────────────────────────
+// Writing the full route_json on every GPS point is expensive. Instead we
+// schedule a flush every ROUTE_FLUSH_MS. On stopTrip we cancel the timer
+// because saveTripWithEvents already does a final authoritative write.
+const ROUTE_FLUSH_MS = 10_000;
+const STALE_TRIP_MS = 12 * 60 * 60 * 1000;
+
+let routeFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRouteFlush() {
+  if (routeFlushTimer !== null) return; // timer already pending — let it fire
+  routeFlushTimer = setTimeout(() => {
+    routeFlushTimer = null;
+    const trip = useStrikeStore.getState().activeTrip;
+    if (trip) enqueueWrite((db) => upsertTrip(db, trip));
+  }, ROUTE_FLUSH_MS);
+}
+
+function cancelRouteFlush() {
+  if (routeFlushTimer !== null) {
+    clearTimeout(routeFlushTimer);
+    routeFlushTimer = null;
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const useStrikeStore = create<StrikeState>((set, get) => ({
   activeTrip: null,
   trips: demoTrips,
@@ -178,6 +235,8 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
   locationSource: "mock",
   weather: null,
   waterLevel: null,
+  mapType: "standard",
+  recoveredStaleTrip: null,
   refreshWeather: (position) => {
     const target = position ?? get().currentLocation;
     if (!target) {
@@ -198,7 +257,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       }
     });
   },
-  startTrip: (position, source = "mock", title) => {
+  startTrip: (position, source = "mock", title, lureId) => {
     const startPosition = position ?? get().currentLocation ?? demoStart;
     const startedAt = new Date();
     const tripTitle = title?.trim() || defaultTripTitle(startedAt);
@@ -206,10 +265,11 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       id: `trip-${id()}`,
       title: tripTitle,
       startedAt: startedAt.toISOString(),
-      route: [startPosition],
+      route: [],
       events: [],
       distanceMeters: 0,
-      steps: 0
+      steps: 0,
+      currentLureId: lureId
     };
     set({
       activeTrip: trip,
@@ -241,6 +301,8 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       lastCompletedTripId: completed.id
     }));
 
+    // Cancel any pending debounced flush — saveTripWithEvents is the final write.
+    cancelRouteFlush();
     // Persist the finished trip with its end time, final route, and all events.
     enqueueWrite((db) => saveTripWithEvents(db, completed));
     persistAppState();
@@ -276,8 +338,9 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       locationSource: source,
       activeTrip: updatedTrip
     });
-    // Keep the in-progress trip's route/distance current so it survives a restart.
-    enqueueWrite((db) => upsertTrip(db, updatedTrip));
+    // Debounced flush: write the route to SQLite at most once every ROUTE_FLUSH_MS.
+    // Individual events (contacts/catches) still write immediately via upsertEvent.
+    scheduleRouteFlush();
   },
   addEvent: (type, details) => {
     const state = get();
@@ -291,7 +354,9 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       type,
       timestamp: new Date().toISOString(),
       position: details?.position ?? state.currentLocation ?? fallbackPoint(state),
-      ...details
+      ...details,
+      // Stamp the trip's active lure unless the caller explicitly supplies one.
+      lureId: details?.lureId ?? trip.currentLureId
     };
 
     set({
@@ -301,19 +366,19 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       }
     });
 
-    // Write the event (sync_status defaults to 'pending' for offline-first sync).
-    enqueueWrite((db) => upsertEvent(db, trip.id, event));
-    // Capture weather for this spot in the background. If offline this no-ops
-    // and syncPendingWeather() back-fills it on the next online launch.
-    void captureWeatherForEvent(event.id, event.position.latitude, event.position.longitude);
+    // Compute the H3 cell once — used both for local storage and Bite Map upload.
+    const h3Cell = latLngToCell(event.position.latitude, event.position.longitude);
 
-    // Bite Map: anonymously contribute area-level activity in the background.
-    // detectZone returns null outside Als; uploadBiteMapEvent enforces the
-    // opt-in gate and only ever sends the zone_id (never exact GPS).
-    const zoneId = detectZone(event.position.latitude, event.position.longitude);
-    if (zoneId !== null) {
-      void uploadBiteMapEvent(event, zoneId, state.weather);
+    // Write the event (sync_status defaults to 'pending' for offline-first sync).
+    enqueueWrite((db) => upsertEvent(db, trip.id, event, h3Cell));
+    // Snapshot the already-fetched conditions — no extra API call. If weather
+    // isn't available yet (offline start), syncPendingWeather() back-fills it.
+    if (state.weather) {
+      storeWeatherForEvent(event.id, state.weather);
     }
+
+    // Bite Map: upload area-level activity — h3Cell only, never exact GPS.
+    void uploadBiteMapEvent(event, h3Cell, state.weather);
 
     return event;
   },
@@ -326,8 +391,110 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       kept: details.kept,
       position: details.position ?? state.currentLocation ?? fallbackPoint(state),
       lengthCm: details.lengthCm,
-      weightKg: details.weightKg
+      weightKg: details.weightKg,
+      lureId: details.lureId,
     });
+  },
+  setMapType: (type) => {
+    set({ mapType: type });
+    persistAppState();
+  },
+  saveRecoveredTrip: () => {
+    const trip = get().recoveredStaleTrip;
+    if (!trip) return;
+    const completed: Trip = { ...trip, endedAt: trip.endedAt ?? new Date().toISOString() };
+    set((state) => ({
+      recoveredStaleTrip: null,
+      trips: [completed, ...state.trips],
+      lastCompletedTripId: completed.id
+    }));
+    enqueueWrite((db) => upsertTrip(db, completed));
+    persistAppState();
+  },
+  discardRecoveredTrip: () => {
+    const trip = get().recoveredStaleTrip;
+    if (!trip) return;
+    set({ recoveredStaleTrip: null });
+    enqueueWrite((db) => deleteTrip(db, trip.id));
+  },
+  deleteCompletedTrip: (tripId) => {
+    const trip = get().trips.find((t) => t.id === tripId);
+    if (!trip) return;
+    set((state) => ({ trips: state.trips.filter((t) => t.id !== tripId) }));
+    const eventIds = trip.events.map((e) => e.id);
+    enqueueWrite(async (db) => {
+      if (eventIds.length > 0) {
+        try {
+          await deleteBiteMapEvents(eventIds);
+        } catch {
+          await queueBiteMapDelete(db, eventIds);
+        }
+      }
+      await deleteTrip(db, tripId);
+    });
+  },
+  removeEvent: (tripId, eventId) => {
+    set((state) => ({
+      trips: state.trips.map((t) =>
+        t.id !== tripId ? t : { ...t, events: t.events.filter((e) => e.id !== eventId) }
+      )
+    }));
+    enqueueWrite(async (db) => {
+      try {
+        await deleteBiteMapEvents([eventId]);
+      } catch {
+        await queueBiteMapDelete(db, [eventId]);
+      }
+      await deleteEvent(db, eventId);
+    });
+  },
+  renameTrip: (tripId, name) => {
+    set((state) => ({
+      trips: state.trips.map((t) => (t.id !== tripId ? t : { ...t, title: name }))
+    }));
+    enqueueWrite((db) => renameTripInDb(db, tripId, name));
+  },
+  updateEvent: (tripId, updatedEvent, opts) => {
+    const updateInTrip = (trip: Trip): Trip =>
+      trip.id === tripId
+        ? { ...trip, events: trip.events.map((e) => e.id === updatedEvent.id ? updatedEvent : e) }
+        : trip;
+    set((state) => ({
+      trips: state.trips.map(updateInTrip),
+      activeTrip: state.activeTrip ? updateInTrip(state.activeTrip) : null,
+    }));
+    enqueueWrite(async (db) => {
+      await upsertEvent(db, tripId, updatedEvent);
+      if (opts?.weatherPatch && Object.keys(opts.weatherPatch).length > 0) {
+        const snapshotId = opts.existingWeather?.id ?? `ws-${id()}`;
+        await insertWeatherSnapshot(db, {
+          id: snapshotId,
+          eventId: updatedEvent.id,
+          ...opts.weatherPatch,
+        });
+      }
+      if (opts?.resyncBiteMap && updatedEvent.type !== "lure") {
+        const h3Cell = latLngToCell(updatedEvent.position.latitude, updatedEvent.position.longitude);
+        const combinedWeather: WeatherSnapshot | null = opts.existingWeather
+          ? { ...opts.existingWeather, ...opts.weatherPatch }
+          : null;
+        await resyncBiteMapEvent(updatedEvent, h3Cell, combinedWeather);
+      }
+    });
+  },
+  setActiveLure: (lureId) => {
+    const trip = get().activeTrip;
+    if (!trip) return;
+    set({ activeTrip: { ...trip, currentLureId: lureId ?? undefined } });
+    enqueueWrite((db) => updateTripLure(db, trip.id, lureId));
+  },
+  changeLure: (lureId, lureName) => {
+    // Update current lure on the trip first, then log the switch as a timeline event.
+    const trip = get().activeTrip;
+    if (!trip) return;
+    set({ activeTrip: { ...trip, currentLureId: lureId ?? undefined } });
+    enqueueWrite((db) => updateTripLure(db, trip.id, lureId));
+    get().addEvent("lure", { comment: lureName, lureId: lureId ?? undefined });
   }
 }));
 
@@ -357,7 +524,8 @@ function persistAppState() {
   void saveAppState({
     locationSource: state.locationSource,
     lastCompletedTripId: state.lastCompletedTripId,
-    currentLocation: state.currentLocation
+    currentLocation: state.currentLocation,
+    mapType: state.mapType
   });
 }
 
@@ -377,6 +545,8 @@ export async function hydrateStore(): Promise<void> {
 
   try {
     const db = await getDb();
+    void flushBiteMapDeleteQueue(db);
+    void flushFeedbackQueue(db);
 
     if (!(await hasSeeded())) {
       for (const trip of demoTrips) {
@@ -391,18 +561,26 @@ export async function hydrateStore(): Promise<void> {
       loadAppState()
     ]);
 
+    // A trip started >12 h ago was almost certainly abandoned. Don't silently
+    // resume it — surface it as recoveredStaleTrip so the user can save or discard.
+    const isStale =
+      active != null &&
+      Date.now() - new Date(active.startedAt).getTime() > STALE_TRIP_MS;
+
     useStrikeStore.setState((state) => ({
       trips,
       // Don't clobber a trip the user may have started before hydration finished.
-      activeTrip: state.activeTrip ?? active,
+      activeTrip: !isStale ? (state.activeTrip ?? active) : state.activeTrip,
+      recoveredStaleTrip: isStale ? active : state.recoveredStaleTrip,
       currentLocation:
         state.activeTrip?.route.at(-1) ??
-        active?.route.at(-1) ??
+        (!isStale ? active?.route.at(-1) : null) ??
         appState.currentLocation ??
         state.currentLocation ??
         demoStart,
       locationSource: appState.locationSource ?? state.locationSource,
-      lastCompletedTripId: appState.lastCompletedTripId ?? state.lastCompletedTripId
+      lastCompletedTripId: appState.lastCompletedTripId ?? state.lastCompletedTripId,
+      mapType: appState.mapType ?? state.mapType
     }));
 
     // Back-fill weather for any events captured offline, then refresh the strip

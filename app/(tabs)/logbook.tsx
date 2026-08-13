@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
+import { TripMap } from "@/components/TripMap";
 import { formatDistance, formatDuration, useStrikeStore } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
@@ -25,6 +26,18 @@ export default function LogbookScreen() {
         <Text style={styles.title}>{t("logbook.title")}</Text>
       </View>
 
+      {trips.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="journal-outline" size={44} color={Colors.textMuted} />
+          <Text style={styles.emptyTitle}>{t("logbook.emptyTitle")}</Text>
+          <Text style={styles.emptyBody}>{t("logbook.emptyBody")}</Text>
+          <Pressable style={styles.emptyBtn} onPress={() => router.replace("/")}>
+            <Ionicons name="navigate-circle-outline" size={20} color={Colors.textOnAmber} />
+            <Text style={styles.emptyBtnText}>{t("actions.startTrip")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.list}>
         {trips.map((trip) => {
           const catches = trip.events.filter((event) => event.type === "catch").length;
@@ -32,7 +45,10 @@ export default function LogbookScreen() {
 
           return (
             <Pressable key={trip.id} style={styles.card} onPress={() => router.push(`/trip/${trip.id}`)}>
-              <View style={styles.cardTop}>
+              {trip.route.length > 1 ? (
+                <TripMap route={trip.route} events={trip.events} height={90} interactive={false} />
+              ) : null}
+              <View style={[styles.cardTop, trip.route.length > 1 && styles.cardTopMap]}>
                 <View>
                   <Text style={styles.date}>{trip.title}</Text>
                   <Text style={styles.place}>{new Date(trip.startedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</Text>
@@ -84,27 +100,62 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.heading,
     letterSpacing: 0
   },
+  emptyState: {
+    alignItems: "center",
+    paddingTop: 40,
+    paddingHorizontal: 24,
+    gap: 12
+  },
+  emptyTitle: {
+    color: Colors.textBright,
+    fontFamily: Fonts.heading,
+    fontSize: 22,
+    letterSpacing: 0,
+    textAlign: "center"
+  },
+  emptyBody: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center"
+  },
+  emptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    height: 52,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    backgroundColor: Colors.amber
+  },
+  emptyBtnText: {
+    color: Colors.textOnAmber,
+    fontFamily: Fonts.heading,
+    fontSize: 15,
+    letterSpacing: 0
+  },
   list: {
     gap: 12
   },
   card: {
-    minHeight: 130,
     borderRadius: 24,
-    padding: 17,
-    justifyContent: "space-between",
+    overflow: "hidden",
     backgroundColor: Colors.card,
     borderWidth: 1,
-    borderColor: Colors.border
+    borderColor: Colors.border,
+    gap: 0,
   },
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    paddingHorizontal: 17,
+    paddingTop: 14,
   },
-  cardTopRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8
+  cardTopMap: {
+    paddingTop: 12,
   },
   date: {
     color: Colors.textBright,
@@ -120,7 +171,10 @@ const styles = StyleSheet.create({
   stats: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8
+    gap: 8,
+    paddingHorizontal: 17,
+    paddingBottom: 14,
+    paddingTop: 10,
   },
   stat: {
     color: Colors.text,

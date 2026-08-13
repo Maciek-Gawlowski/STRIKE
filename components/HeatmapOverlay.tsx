@@ -30,16 +30,16 @@ export function HeatmapOverlay({ width, height, points }: Props) {
   return (
     <Svg width={width} height={height} pointerEvents="none">
       <Defs>
-        <Filter id="heatBlur" x="-60%" y="-60%" width="220%" height="220%">
-          <FeGaussianBlur in="SourceGraphic" stdDeviation={14} />
+        <Filter id="heatBlur" x="-80%" y="-80%" width="260%" height="260%">
+          <FeGaussianBlur in="SourceGraphic" stdDeviation={22} />
         </Filter>
         {points.map((point) => (
           <RadialGradient key={point.id} id={`heatGrad-${point.id}`} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor="#FF1400" stopOpacity={point.value * 0.95} />
-            <Stop offset="0.3" stopColor="#FF6600" stopOpacity={point.value * 0.8} />
-            <Stop offset="0.55" stopColor="#FFCC00" stopOpacity={point.value * 0.6} />
-            <Stop offset="0.75" stopColor="#00C040" stopOpacity={point.value * 0.35} />
-            <Stop offset="1.0" stopColor="#00C040" stopOpacity={0} />
+            <Stop offset="0"    stopColor="#FF1400" stopOpacity={point.value * 0.38} />
+            <Stop offset="0.20" stopColor="#FF5500" stopOpacity={point.value * 0.24} />
+            <Stop offset="0.42" stopColor="#FF9900" stopOpacity={point.value * 0.14} />
+            <Stop offset="0.65" stopColor="#AADD00" stopOpacity={point.value * 0.06} />
+            <Stop offset="1.0"  stopColor="#00CC44" stopOpacity={0} />
           </RadialGradient>
         ))}
       </Defs>

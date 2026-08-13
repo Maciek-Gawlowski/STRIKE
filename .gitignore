@@ -6,3 +6,12 @@ dist
 web-build
 *.log
 .DS_Store
+
+# iOS credentials — never commit
+credentials.json
+dist-cert.p12
+*.p12
+strike.mobileprovision
+*.mobileprovision
+asc-api-key.p8
+*.p8

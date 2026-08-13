@@ -12,14 +12,17 @@ const KEYS = {
   locationSource: "strike.locationSource",
   lastCompletedTripId: "strike.lastCompletedTripId",
   currentLocation: "strike.currentLocation",
-  biteMapContribution: "strike.biteMapContribution",
-  onboardingCompleted: "strike.onboardingCompleted"
+  onboardingCompleted: "strike.onboardingCompleted",
+  mapType: "strike.mapType"
 } as const;
+
+export type MapType = "standard" | "satellite" | "hybrid";
 
 export type PersistedAppState = {
   locationSource: "gps" | "mock";
   lastCompletedTripId: string | null;
   currentLocation: Coordinate | null;
+  mapType: MapType;
 };
 
 /** True once the one-time demo data has been written to SQLite. */
@@ -33,10 +36,11 @@ export async function markSeeded(): Promise<void> {
 
 /** Reads the persisted app-state slice; missing/corrupt values fall back. */
 export async function loadAppState(): Promise<Partial<PersistedAppState>> {
-  const [source, lastTripId, location] = await AsyncStorage.multiGet([
+  const [source, lastTripId, location, mapType] = await AsyncStorage.multiGet([
     KEYS.locationSource,
     KEYS.lastCompletedTripId,
-    KEYS.currentLocation
+    KEYS.currentLocation,
+    KEYS.mapType
   ]);
 
   const result: Partial<PersistedAppState> = {};
@@ -61,6 +65,11 @@ export async function loadAppState(): Promise<Partial<PersistedAppState>> {
     }
   }
 
+  const mt = mapType[1];
+  if (mt === "satellite" || mt === "hybrid" || mt === "standard") {
+    result.mapType = mt;
+  }
+
   return result;
 }
 
@@ -70,27 +79,11 @@ export async function saveAppState(state: PersistedAppState): Promise<void> {
     await AsyncStorage.multiSet([
       [KEYS.locationSource, state.locationSource],
       [KEYS.lastCompletedTripId, state.lastCompletedTripId ?? ""],
-      [KEYS.currentLocation, state.currentLocation ? JSON.stringify(state.currentLocation) : ""]
+      [KEYS.currentLocation, state.currentLocation ? JSON.stringify(state.currentLocation) : ""],
+      [KEYS.mapType, state.mapType ?? "standard"]
     ]);
   } catch (error) {
     console.warn("[strike/prefs] saveAppState failed", error);
-  }
-}
-
-// --- Bite Map sharing preference --------------------------------------------
-
-/** Whether the user contributes anonymous activity to the Bite Map. Default on. */
-export async function getBiteMapContribution(): Promise<boolean> {
-  const value = await AsyncStorage.getItem(KEYS.biteMapContribution);
-  // Default to true when unset; only an explicit "false" turns it off.
-  return value !== "false";
-}
-
-export async function setBiteMapContribution(enabled: boolean): Promise<void> {
-  try {
-    await AsyncStorage.setItem(KEYS.biteMapContribution, enabled ? "true" : "false");
-  } catch (error) {
-    console.warn("[strike/prefs] setBiteMapContribution failed", error);
   }
 }
 
@@ -108,6 +101,24 @@ export async function setOnboardingCompleted(completed: boolean): Promise<void> 
   } catch (error) {
     console.warn("[strike/prefs] setOnboardingCompleted failed", error);
   }
+}
+
+// --- Local user identity (alpha tester correlation, not account identity) ----
+
+/**
+ * Returns a stable per-install random ID. Generated once and persisted in
+ * AsyncStorage. This is NOT a user account identifier — it exists only to let
+ * alpha testers correlate multiple feedback submissions from the same device.
+ */
+export async function getOrCreateLocalUserId(): Promise<string> {
+  const KEY = "strike.localUserId";
+  const existing = await AsyncStorage.getItem(KEY);
+  if (existing) return existing;
+  const newId =
+    Math.random().toString(36).slice(2, 10) +
+    Math.random().toString(36).slice(2, 10);
+  await AsyncStorage.setItem(KEY, newId);
+  return newId;
 }
 
 export { KEYS as PREFERENCE_KEYS };

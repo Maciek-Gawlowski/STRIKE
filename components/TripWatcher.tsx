@@ -2,6 +2,8 @@ import * as Location from "expo-location";
 import { useEffect } from "react";
 import { useStrikeStore } from "@/store/useStrikeStore";
 
+const WEATHER_INTERVAL_MS = 15 * 60 * 1000;
+
 export function TripWatcher() {
   const activeTripId = useStrikeStore((state) => state.activeTrip?.id);
   const appendRoutePoint = useStrikeStore((state) => state.appendRoutePoint);
@@ -14,6 +16,10 @@ export function TripWatcher() {
     let mounted = true;
     let subscription: Location.LocationSubscription | null = null;
     let mockTimer: ReturnType<typeof setInterval> | null = null;
+
+    const weatherTimer = setInterval(() => {
+      useStrikeStore.getState().refreshWeather();
+    }, WEATHER_INTERVAL_MS);
 
     const startMockTracking = () => {
       mockTimer = setInterval(() => {
@@ -86,6 +92,7 @@ export function TripWatcher() {
       if (mockTimer) {
         clearInterval(mockTimer);
       }
+      clearInterval(weatherTimer);
     };
   }, [activeTripId, appendRoutePoint]);
 
