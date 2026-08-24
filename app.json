@@ -13,7 +13,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.strikeangler.app",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "STRIKE uses your position to draw the fishing route and tag contacts, lost fish, and catches.",
