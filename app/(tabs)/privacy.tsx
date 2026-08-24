@@ -45,7 +45,7 @@ const LANGUAGE_OPTIONS: { value: Locale; labelKey: string }[] = [
   { value: "en", labelKey: "settings.english" },
 ];
 
-const FISHING_METHOD_KEYS = ["kyst", "spin", "flue", "medefiskeri", "andet"] as const;
+const FISHING_METHOD_KEYS = ["spin", "flue", "medefiskeri", "andet"] as const;
 const FISHING_LOCATION_KEYS = ["kyst", "aa", "soe", "putOgTake"] as const;
 
 type SpeciesEntry = { key: string; label: string };
@@ -54,6 +54,7 @@ type SpeciesEntry = { key: string; label: string };
 const FRESHWATER_SPECIES: SpeciesEntry[] = [
   { key: "gedde",     label: "Gedde" },
   { key: "aborre",    label: "Aborre" },
+  { key: "laks",      label: "Laks" },
   { key: "bækørred",  label: "Bækørred" },
   { key: "stalling",  label: "Stalling" },
   { key: "suder",     label: "Suder" },
@@ -65,6 +66,7 @@ const FRESHWATER_SPECIES: SpeciesEntry[] = [
 // TODO: Confirm with user whether to group under collapsible "Fladfisk" header.
 const SALTWATER_SPECIES: SpeciesEntry[] = [
   { key: "havoerred", label: "Havørred" },
+  { key: "laks",      label: "Laks" },
   { key: "torsk",     label: "Torsk" },
   { key: "hornfisk",  label: "Hornfisk" },
   { key: "makrel",    label: "Makrel" },

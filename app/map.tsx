@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { ActionButton } from "@/components/ActionButton";
 import { LureColourDot } from "@/components/LureColourDot";
 import { MetricCard } from "@/components/MetricCard";
@@ -30,6 +32,7 @@ export default function MapScreen() {
   const currentLocation = useStrikeStore((state) => state.currentLocation);
   const addEvent = useStrikeStore((state) => state.addEvent);
   const addCatch = useStrikeStore((state) => state.addCatch);
+  const updateEvent = useStrikeStore((state) => state.updateEvent);
   const stopTrip = useStrikeStore((state) => state.stopTrip);
   const mapType = useStrikeStore((state) => state.mapType);
   const setMapType = useStrikeStore((state) => state.setMapType);
@@ -39,6 +42,8 @@ export default function MapScreen() {
   const [now, setNow] = useState(Date.now());
   const [lures, setLures] = useState<Lure[]>([]);
   const [lurePickerOpen, setLurePickerOpen] = useState(false);
+  const [catchPickerOpen, setCatchPickerOpen] = useState(false);
+  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -70,6 +75,67 @@ export default function MapScreen() {
       Animated.delay(320),
       Animated.timing(celebAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
+  };
+
+  const handlePhoto = () => {
+    Alert.alert(t("catch.addPhoto"), undefined, [
+      {
+        text: t("catch.takePhoto"), onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (perm.status !== "granted") {
+            Alert.alert(t("catch.cameraPermissionDenied") ?? "Camera access denied");
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.85 });
+          if (!result.canceled && result.assets[0]) {
+            await attachPhotoToTrip(result.assets[0].uri);
+          }
+        },
+      },
+      {
+        text: t("catch.chooseLibrary"), onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: false,
+            quality: 0.85,
+          });
+          if (!result.canceled && result.assets[0]) {
+            await attachPhotoToTrip(result.assets[0].uri);
+          }
+        },
+      },
+      { text: t("common.cancel"), style: "cancel" },
+    ]);
+  };
+
+  const attachPhotoToTrip = async (uri: string) => {
+    if (!activeTrip) return;
+    const catches = activeTrip.events.filter((e) => e.type === "catch");
+    if (catches.length === 0) {
+      // No catches yet — store photo temporarily, it will be discarded (nowhere to attach)
+      Alert.alert(t("catch.noYetCatch") ?? "Log a catch first to attach a photo");
+      return;
+    }
+    if (catches.length === 1) {
+      await savePhotoToCatch(activeTrip.id, catches[0].id, uri);
+    } else {
+      // Multiple catches — let user pick which one
+      setPendingPhotoUri(uri);
+      setCatchPickerOpen(true);
+    }
+  };
+
+  const savePhotoToCatch = async (tripId: string, eventId: string, uri: string) => {
+    if (!activeTrip) return;
+    const event = activeTrip.events.find((e) => e.id === eventId);
+    if (!event) return;
+    try {
+      const dest = `${FileSystem.documentDirectory}strike_catch_${eventId}_${Date.now()}.jpg`;
+      await FileSystem.copyAsync({ from: uri, to: dest });
+      updateEvent(tripId, { ...event, photoUri: dest });
+    } catch {
+      updateEvent(tripId, { ...event, photoUri: uri });
+    }
   };
 
   const handleStop = async () => {
@@ -156,16 +222,20 @@ export default function MapScreen() {
 
       <View style={styles.eventGrid}>
         <Pressable style={[styles.eventBtn, styles.eventContact]} onPress={() => handleEvent("contact")}>
-          <Ionicons name="flash-outline" size={26} color={Colors.textOnAmber} />
+          <Ionicons name="flash-outline" size={22} color={Colors.textOnAmber} />
           <Text style={[styles.eventBtnText, { color: Colors.textOnAmber }]}>{t("actions.contact")}</Text>
         </Pressable>
         <Pressable style={[styles.eventBtn, styles.eventFollowing]} onPress={() => handleEvent("following")}>
-          <Ionicons name="eye-outline" size={26} color={Colors.textBright} />
+          <Ionicons name="eye-outline" size={22} color={Colors.textBright} />
           <Text style={[styles.eventBtnText, { color: Colors.textBright }]}>{t("actions.following")}</Text>
         </Pressable>
         <Pressable style={[styles.eventBtn, styles.eventCatch]} onPress={() => void handleCatch()}>
-          <Ionicons name="fish-outline" size={26} color={Colors.catchText} />
+          <Ionicons name="fish-outline" size={22} color={Colors.catchText} />
           <Text style={[styles.eventBtnText, { color: Colors.catchText }]}>{t("actions.newCatch")}</Text>
+        </Pressable>
+        <Pressable style={[styles.eventBtn, styles.eventPhoto]} onPress={handlePhoto}>
+          <Ionicons name="camera-outline" size={22} color={Colors.textBright} />
+          <Text style={[styles.eventBtnText, { color: Colors.textBright }]}>{t("actions.photo")}</Text>
         </Pressable>
       </View>
 
@@ -202,6 +272,32 @@ export default function MapScreen() {
                   <Text style={styles.lureOptionText}>{lure.name}</Text>
                 </View>
                 {lure.id === activeTrip.currentLureId ? <Ionicons name="checkmark" size={20} color={Colors.amber} /> : null}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Catch picker — choose which catch to attach a photo to */}
+      <Modal visible={catchPickerOpen} transparent animationType="fade" onRequestClose={() => { setCatchPickerOpen(false); setPendingPhotoUri(null); }}>
+        <Pressable style={styles.modalScrim} onPress={() => { setCatchPickerOpen(false); setPendingPhotoUri(null); }}>
+          <View style={styles.modalCard}>
+            <Text style={styles.lureOptionText}>{t("catch.attachToWhich") ?? "Attach photo to catch:"}</Text>
+            {activeTrip?.events.filter((e) => e.type === "catch").map((event, idx) => (
+              <Pressable
+                key={event.id}
+                style={styles.lureOption}
+                onPress={() => {
+                  setCatchPickerOpen(false);
+                  if (pendingPhotoUri && activeTrip) {
+                    void savePhotoToCatch(activeTrip.id, event.id, pendingPhotoUri);
+                  }
+                  setPendingPhotoUri(null);
+                }}
+              >
+                <Text style={styles.lureOptionText}>
+                  {event.species?.trim() ? event.species : `${t("events.catch")} ${idx + 1}`}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -317,6 +413,11 @@ const styles = StyleSheet.create({
   },
   eventCatch: {
     backgroundColor: Colors.catchGreen,
+  },
+  eventPhoto: {
+    backgroundColor: "#2a3a4a",
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   celebOverlay: {
     ...StyleSheet.absoluteFillObject,

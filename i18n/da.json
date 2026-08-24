@@ -26,7 +26,8 @@
     "saveCatch": "Gem fangst",
     "newTrip": "Ny tur",
     "openLogbook": "Åbn logbog",
-    "changeLure": "Skift agn"
+    "changeLure": "Skift agn",
+    "photo": "Foto"
   },
   "events": {
     "contact": "Kontakt",
@@ -147,7 +148,11 @@
     "length": "Længde (cm)",
     "weight": "Vægt (kg)",
     "lure": "Agn",
-    "noLure": "Uden agn"
+    "noLure": "Uden agn",
+    "addPhoto": "Tilføj foto",
+    "noYetCatch": "Registrér en fangst først for at tilknytte et foto",
+    "attachToWhich": "Tilknyt foto til fangst:",
+    "cameraPermissionDenied": "Kameraadgang nægtet"
   },
   "catchDetail": {
     "kicker": "FANGSTDETALJER",
@@ -270,7 +275,6 @@
       "lureBrown":  "Brun"
     },
     "fishingTypes": {
-      "kyst": "Kystfiskeri/Casting",
       "spin": "Spinnefiskeri",
       "flue": "Fluefiskeri",
       "medefiskeri": "Medefiskeri",

@@ -26,7 +26,8 @@
     "saveCatch": "Save Catch",
     "newTrip": "New Trip",
     "openLogbook": "Open Logbook",
-    "changeLure": "Change lure"
+    "changeLure": "Change lure",
+    "photo": "Photo"
   },
   "events": {
     "contact": "Contact",
@@ -147,7 +148,11 @@
     "length": "Length (cm)",
     "weight": "Weight (kg)",
     "lure": "Lure",
-    "noLure": "No lure"
+    "noLure": "No lure",
+    "addPhoto": "Add photo",
+    "noYetCatch": "Log a catch first to attach a photo",
+    "attachToWhich": "Attach photo to catch:",
+    "cameraPermissionDenied": "Camera access denied"
   },
   "catchDetail": {
     "kicker": "CATCH DETAILS",
@@ -270,7 +275,6 @@
       "lureBrown":  "Brown"
     },
     "fishingTypes": {
-      "kyst": "Shore/Casting",
       "spin": "Spinning",
       "flue": "Fly fishing",
       "medefiskeri": "Bait fishing",

@@ -17,6 +17,7 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "STRIKE uses your position to draw the fishing route and tag contacts, lost fish, and catches.",
+        "NSCameraUsageDescription": "STRIKE uses your camera to take catch and profile photos.",
         "NSPhotoLibraryUsageDescription": "STRIKE lets you attach catch photos to your trip log.",
         "ITSAppUsesNonExemptEncryption": false
       }

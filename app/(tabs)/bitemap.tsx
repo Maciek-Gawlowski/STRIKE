@@ -54,6 +54,7 @@ const TIME_TABS: TimeTab[] = [
 
 const ALL_SPECIES = [
   { key: "havoerred", label: "Havørred" },
+  { key: "laks",      label: "Laks" },
   { key: "gedde",     label: "Gedde" },
   { key: "torsk",     label: "Torsk" },
   { key: "aborre",    label: "Aborre" },
@@ -152,7 +153,6 @@ export default function BiteMapScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
-  const [usingMock, setUsingMock] = useState(false);
 
   // Spots
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -186,9 +186,7 @@ export default function BiteMapScreen() {
       eventTypes: eventTypes.length > 0 ? eventTypes : undefined,
     };
     const data = await getBiteMapData(filter);
-    const mock = data.length === 0;
-    setUsingMock(mock);
-    setHexes(mock ? MOCK_BITE_MAP_ACTIVITY : data);
+    setHexes(data);
   }, []);
 
   // Restore sticky filter prefs on mount
@@ -253,17 +251,6 @@ export default function BiteMapScreen() {
     const sizeScale = timeMode === "7d" ? 1.15 : 1;
     const zoomScale = INITIAL_LAT_DELTA / liveRegion.latitudeDelta;
 
-    if (usingMock) {
-      return MOCK_HEAT_POINTS
-        .filter((point) => inViewport(point.latitude, point.longitude, liveRegion))
-        .filter(() => true)
-        .map((point) => {
-          const { x, y } = latLngToXY(point.latitude, point.longitude, liveRegion, mapSize.width, mapSize.height);
-          const radius = lerp(35, 90, point.value) * sizeScale * zoomScale;
-          return { id: point.id, x, y, rx: radius, ry: radius, value: point.value };
-        });
-    }
-
     return hexPositions
       .map((pos) => {
         const total = hexes.find((h) => h.h3_cell === pos.cell)?.total ?? 0;
@@ -275,7 +262,7 @@ export default function BiteMapScreen() {
         const radius = lerp(35, 90, point.value) * sizeScale * zoomScale;
         return { id: idx, x: point.x, y: point.y, rx: radius, ry: radius, value: point.value };
       });
-  }, [hexPositions, hexes, timeMode, usingMock, mapSize, liveRegion]);
+  }, [hexPositions, hexes, timeMode, mapSize, liveRegion]);
 
   // Top 8 hex cells by activity — rendered as numbered markers
   const hotspots = useMemo(

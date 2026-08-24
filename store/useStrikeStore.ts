@@ -415,7 +415,17 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     const trip = get().recoveredStaleTrip;
     if (!trip) return;
     set({ recoveredStaleTrip: null });
-    enqueueWrite((db) => deleteTrip(db, trip.id));
+    const eventIds = trip.events.map((e) => e.id);
+    enqueueWrite(async (db) => {
+      if (eventIds.length > 0) {
+        try {
+          await deleteBiteMapEvents(eventIds);
+        } catch {
+          await queueBiteMapDelete(db, eventIds);
+        }
+      }
+      await deleteTrip(db, trip.id);
+    });
   },
   deleteCompletedTrip: (tripId) => {
     const trip = get().trips.find((t) => t.id === tripId);
