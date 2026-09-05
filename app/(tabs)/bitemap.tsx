@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -204,6 +204,12 @@ export default function BiteMapScreen() {
     setLoading(true);
     load(timeMode, null, null, speciesFilter, eventTypeFilter).finally(() => setLoading(false));
   }, [timeMode, speciesFilter, eventTypeFilter, load]);
+
+  // Reload on tab focus so catches logged on other screens appear immediately.
+  useFocusEffect(useCallback(() => {
+    if (timeMode === "custom") return;
+    load(timeMode, null, null, speciesFilter, eventTypeFilter).catch(() => null);
+  }, [timeMode, speciesFilter, eventTypeFilter, load]));
 
   // Load spots
   useEffect(() => {

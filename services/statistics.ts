@@ -142,6 +142,7 @@ export type BestConditions = {
   waterTempRange: string | null;
   windDirection: string | null;
   windSpeedAvg: number | null;
+  pressureAvg: number | null;
 };
 
 export async function getBestConditions(): Promise<BestConditions> {
@@ -187,10 +188,19 @@ export async function getBestConditions(): Promise<BestConditions> {
      WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.wind_speed IS NOT NULL`
   );
 
+  const pressureRow = await db.getFirstAsync<{ avg: number }>(
+    `SELECT AVG(w.pressure) AS avg
+     FROM events e
+     JOIN trips t ON t.id = e.trip_id
+     JOIN weather_snapshots w ON w.event_id = e.id
+     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.pressure IS NOT NULL`
+  );
+
   return {
     waterTempRange,
     windDirection: windRow?.direction ?? null,
     windSpeedAvg: speedRow?.avg != null ? Math.round(speedRow.avg) : null,
+    pressureAvg: pressureRow?.avg != null ? Math.round(pressureRow.avg) : null,
   };
 }
 

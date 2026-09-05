@@ -378,6 +378,9 @@ export default function ProfileScreen() {
       </View>
 
       {/* ── Foretrukne arter — only shown when water type is set ── */}
+      {!waterType ? (
+        <Text style={styles.hintText}>{t("profile.waterTypeHint")}</Text>
+      ) : null}
       {waterType ? (
         <>
           <Text style={styles.sectionTitle}>{t("profile.sectionSpecies")}</Text>
@@ -599,6 +602,7 @@ const styles = StyleSheet.create({
   kicker: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.bodySemibold, letterSpacing: 0 },
   title: { color: Colors.textBright, fontSize: 35, fontFamily: Fonts.heading, letterSpacing: 0 },
   sectionTitle: { color: Colors.textBright, fontSize: 18, fontFamily: Fonts.heading, letterSpacing: 0 },
+  hintText: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.body, letterSpacing: 0, marginTop: 2, marginBottom: 4 },
   subSectionTitle: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.bodySemibold, letterSpacing: 0, textTransform: "uppercase", marginTop: 4 },
   panel: { borderRadius: 24, padding: 16, gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
 

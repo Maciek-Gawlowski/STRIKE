@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { Circle, G, Line, Rect, Svg, Text as SvgText } from "react-native-svg";
+import { Circle, G, Line, Path, Rect, Svg, Text as SvgText } from "react-native-svg";
 import { GlassCard } from "@/components/GlassCard";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
@@ -220,43 +220,173 @@ function DayStrip({
   );
 }
 
-// ── Monthly bar chart ─────────────────────────────────────────────────────────
+// ── Time-of-day donut ring ────────────────────────────────────────────────────
 
-type ChartMode = "catches" | "contacts" | "following" | "species";
-type MonthBucket = { key: string; label: string; catches: number; contacts: number; following: number };
+const TOD_PERIODS = [
+  { key: "morning",   label: "Morgen",    hours: [5,6,7,8,9,10,11],         color: "#F5A623" },
+  { key: "afternoon", label: "Eftermiddag", hours: [12,13,14,15,16,17],     color: "#FF6A00" },
+  { key: "evening",   label: "Aften",     hours: [18,19,20],                color: "#3A86B0" },
+  { key: "night",     label: "Nat",       hours: [21,22,23,0,1,2,3,4],      color: "#4a5e6e" },
+] as const;
+
+function polarToCart(cx: number, cy: number, r: number, angleDeg: number): [number, number] {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+}
+
+function donutArcPath(cx: number, cy: number, outerR: number, innerR: number, startDeg: number, endDeg: number): string {
+  const [ox1, oy1] = polarToCart(cx, cy, outerR, startDeg);
+  const [ox2, oy2] = polarToCart(cx, cy, outerR, endDeg);
+  const [ix2, iy2] = polarToCart(cx, cy, innerR, endDeg);
+  const [ix1, iy1] = polarToCart(cx, cy, innerR, startDeg);
+  const large = endDeg - startDeg > 180 ? 1 : 0;
+  return `M ${ox1.toFixed(2)} ${oy1.toFixed(2)} A ${outerR} ${outerR} 0 ${large} 1 ${ox2.toFixed(2)} ${oy2.toFixed(2)} L ${ix2.toFixed(2)} ${iy2.toFixed(2)} A ${innerR} ${innerR} 0 ${large} 0 ${ix1.toFixed(2)} ${iy1.toFixed(2)} Z`;
+}
+
+const RING_SIZE = 140, RING_CX = 70, RING_CY = 70, RING_OUTER = 58, RING_INNER = 36;
+
+function TimeOfDayRing({ hourCounts }: { hourCounts: number[] }) {
+  const counts = TOD_PERIODS.map((p) => ({
+    ...p,
+    count: p.hours.reduce((s: number, h) => s + (hourCounts[h] ?? 0), 0),
+  }));
+  const total = counts.reduce((s, c) => s + c.count, 0);
+  const best = counts.reduce((a, b) => (b.count > a.count ? b : a), counts[0]);
+
+  let cursor = 0;
+  const segments = counts.map((seg) => {
+    const fraction = total > 0 ? seg.count / total : 0.25;
+    const sweep = fraction * 360;
+    const start = cursor;
+    const end = cursor + Math.max(sweep, sweep > 0 ? 2 : 0);
+    cursor += sweep > 0 ? sweep : 90;
+    return { ...seg, start, end };
+  });
+
+  return (
+    <View style={styles.ringWrap}>
+      <Svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
+        {/* background track */}
+        <Circle cx={RING_CX} cy={RING_CY} r={(RING_OUTER + RING_INNER) / 2}
+          fill="none" stroke="rgba(217,218,213,0.07)"
+          strokeWidth={RING_OUTER - RING_INNER} />
+        {segments.map((seg) => {
+          if (seg.end - seg.start < 0.5) return null;
+          return (
+            <Path
+              key={seg.key}
+              d={donutArcPath(RING_CX, RING_CY, RING_OUTER, RING_INNER, seg.start, seg.end)}
+              fill={seg.color}
+              opacity={total > 0 ? 0.9 : 0.2}
+            />
+          );
+        })}
+        {/* centre label */}
+        <SvgText x={RING_CX} y={RING_CY - 5} textAnchor="middle"
+          fill={total > 0 ? best.color : Colors.textMuted}
+          fontSize={10} fontFamily={Fonts.bodySemibold}>
+          {total > 0 ? best.label : "–"}
+        </SvgText>
+        {total > 0 && (
+          <SvgText x={RING_CX} y={RING_CY + 9} textAnchor="middle"
+            fill={Colors.textMuted} fontSize={8} fontFamily={Fonts.body}>
+            {best.count} fangster
+          </SvgText>
+        )}
+      </Svg>
+      {/* Legend */}
+      <View style={styles.ringLegend}>
+        {counts.map((seg) => (
+          <View key={seg.key} style={styles.ringLegendRow}>
+            <View style={[styles.ringLegendDot, { backgroundColor: seg.color }]} />
+            <Text style={styles.ringLegendLabel}>{seg.label}</Text>
+            <Text style={[styles.ringLegendCount, { color: seg.color }]}>{seg.count}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ── Monthly stacked bar chart ─────────────────────────────────────────────────
+type MonthBucket = { key: string; label: string; catches: number; contacts: number; following: number; lost: number };
 type SpeciesBucket = { species: string; count: number };
 
 const N_MONTHS = 6;
-const MBAR_W = 288, MBAR_H = 108;
-const MBAR_BOTTOM = 20, MBAR_TOP = 16, MBAR_GAP = 8;
+const MBAR_W = 288, MBAR_H = 130;
+const MBAR_BOTTOM = 20, MBAR_TOP = 8, MBAR_GAP = 7;
 const MBAR_USABLE = MBAR_H - MBAR_BOTTOM - MBAR_TOP;
 const MBAR_BAR = (MBAR_W - (N_MONTHS - 1) * MBAR_GAP) / N_MONTHS;
 
-function MonthlyBarChart({ data, mode }: { data: MonthBucket[]; mode: Exclude<ChartMode, "species"> }) {
-  const maxCount = Math.max(...data.map((d) => d[mode]), 1);
+const SEG_COLORS = {
+  catches:  "#3DDBA0",
+  contacts: "#FF6A00",
+  following: "#3A86B0",
+  lost:     "#4a5e6e",
+} as const;
+
+function StackedMonthlyChart({ data }: { data: MonthBucket[] }) {
+  const maxTotal = Math.max(...data.map((d) => d.catches + d.contacts + d.following + d.lost), 1);
+
   return (
     <Svg width={MBAR_W} height={MBAR_H} viewBox={`0 0 ${MBAR_W} ${MBAR_H}`}>
       {data.map((bucket, i) => {
-        const count = bucket[mode];
-        const barH = count > 0 ? Math.max((count / maxCount) * MBAR_USABLE, 5) : 0;
+        const total = bucket.catches + bucket.contacts + bucket.following + bucket.lost;
         const x = i * (MBAR_BAR + MBAR_GAP);
-        const y = MBAR_H - MBAR_BOTTOM - barH;
-        const opacity = count > 0 ? 0.3 + 0.7 * (count / maxCount) : 0.08;
+        const totalH = total > 0 ? Math.max((total / maxTotal) * MBAR_USABLE, 4) : 0;
+
+        // Background slot
+        const bgY = MBAR_TOP;
+        const bgH = MBAR_USABLE;
+
+        // Segment heights (bottom-up: lost, following, contacts, catches)
+        const segments: { key: keyof typeof SEG_COLORS; h: number }[] = [];
+        const keys: (keyof typeof SEG_COLORS)[] = ["lost", "following", "contacts", "catches"];
+        for (const key of keys) {
+          const count = bucket[key];
+          if (count > 0 && total > 0) {
+            segments.push({ key, h: (count / total) * totalH });
+          }
+        }
+
+        let curY = MBAR_H - MBAR_BOTTOM;
+        const segEls: React.ReactElement[] = [];
+        for (const seg of segments) {
+          curY -= seg.h;
+          segEls.push(
+            <Rect
+              key={seg.key}
+              x={x}
+              y={curY}
+              width={MBAR_BAR}
+              height={seg.h}
+              fill={SEG_COLORS[seg.key]}
+              opacity={0.88}
+            />
+          );
+        }
+
         return (
           <G key={bucket.key}>
-            <Rect x={x} y={MBAR_TOP} width={MBAR_BAR} height={MBAR_USABLE}
+            {/* background slot */}
+            <Rect x={x} y={bgY} width={MBAR_BAR} height={bgH}
               fill="rgba(217,218,213,0.05)" rx={5} />
-            {count > 0 && (
-              <Rect x={x} y={y} width={MBAR_BAR} height={barH}
-                fill={Colors.amber} opacity={opacity} rx={5} />
-            )}
-            {count > 0 && (
-              <SvgText x={x + MBAR_BAR / 2} y={y - 3}
-                fill={Colors.textBright} fontSize={10}
-                textAnchor="middle" fontFamily={Fonts.heading}>
-                {count}
+            {/* stacked segments with rounded top on the topmost */}
+            {segEls}
+            {/* total label above bar */}
+            {total > 0 && (
+              <SvgText
+                x={x + MBAR_BAR / 2}
+                y={MBAR_H - MBAR_BOTTOM - totalH - 3}
+                fill={Colors.textBright}
+                fontSize={9}
+                textAnchor="middle"
+                fontFamily={Fonts.heading}
+              >
+                {total}
               </SvgText>
             )}
+            {/* month label */}
             <SvgText x={x + MBAR_BAR / 2} y={MBAR_H - 4}
               fill={Colors.textMuted} fontSize={8}
               textAnchor="middle" fontFamily={Fonts.bodySemibold}>
@@ -266,6 +396,25 @@ function MonthlyBarChart({ data, mode }: { data: MonthBucket[]; mode: Exclude<Ch
         );
       })}
     </Svg>
+  );
+}
+
+function StackedChartLegend({ t }: { t: (k: string) => string }) {
+  const items: { color: string; label: string }[] = [
+    { color: SEG_COLORS.catches,  label: t("metrics.catches") },
+    { color: SEG_COLORS.contacts, label: t("metrics.contacts") },
+    { color: SEG_COLORS.following, label: t("stats.following") },
+    { color: SEG_COLORS.lost,     label: t("stats.lost") },
+  ];
+  return (
+    <View style={styles.stackLegend}>
+      {items.map((item) => (
+        <View key={item.color} style={styles.stackLegendRow}>
+          <View style={[styles.stackLegendDot, { backgroundColor: item.color }]} />
+          <Text style={styles.stackLegendLabel}>{item.label}</Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -293,6 +442,27 @@ function ChartNoData({ label }: { label: string }) {
   return (
     <View style={styles.noData}>
       <Text style={styles.noDataText}>{label}</Text>
+    </View>
+  );
+}
+
+// ── Hero stat tile (icon + big number + label) ────────────────────────────────
+
+function StatTileHero({
+  icon, value, label, color,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: number;
+  label: string;
+  color?: string;
+}) {
+  return (
+    <View style={styles.heroTile}>
+      <Ionicons name={icon} size={22} color={color ?? Colors.amber} style={styles.heroIcon} />
+      <Text style={[styles.heroValue, color ? { color } : null]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Text style={styles.heroLabel} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -335,7 +505,6 @@ export default function StatsScreen() {
   const [lureStats, setLureStats] = useState<LureStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [chartMode, setChartMode] = useState<ChartMode>("catches");
 
   const allEvents = useMemo(() => {
     const all = activeTrip ? [activeTrip, ...trips] : trips;
@@ -348,13 +517,11 @@ export default function StatsScreen() {
       const d = new Date(now.getFullYear(), now.getMonth() - (N_MONTHS - 1 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const label = d.toLocaleDateString([], { month: "short" });
-      return {
-        key,
-        label,
-        catches:   allEvents.filter((e) => e.type === "catch"     && e.timestamp.startsWith(key)).length,
-        contacts:  allEvents.filter((e) => e.type === "contact"   && e.timestamp.startsWith(key)).length,
-        following: allEvents.filter((e) => e.type === "following" && e.timestamp.startsWith(key)).length,
-      };
+      const catches   = allEvents.filter((e) => e.type === "catch"     && e.timestamp.startsWith(key)).length;
+      const contacts  = allEvents.filter((e) => e.type === "contact"   && e.timestamp.startsWith(key)).length;
+      const following = allEvents.filter((e) => e.type === "following" && e.timestamp.startsWith(key)).length;
+      const lost = Math.max(contacts - catches, 0);
+      return { key, label, catches, contacts, following, lost };
     });
   }, [allEvents]);
 
@@ -440,6 +607,7 @@ export default function StatsScreen() {
 
   const hoursPerCatch = stats.totalCatches > 0 ? stats.totalHours / stats.totalCatches : null;
   const noDataLabel = t("stats.noData");
+  const totalLost = Math.max(stats.totalContacts - stats.totalCatches, 0);
 
   const hasWindData = stats.catchesByWindDirection.length > 0;
   const hasTempData = stats.catchesByWaterTemp.some((b) => b.count > 0);
@@ -454,15 +622,12 @@ export default function StatsScreen() {
         <Text style={styles.title}>{t("stats.title")}</Text>
       </View>
 
-      {/* a) Overview */}
-      <SectionHeader title={t("stats.overview")} />
-      <View style={styles.gridRow}>
-        <MetricCard label={t("stats.trips")} value={stats.totalTrips} />
-        <MetricCard label={t("metrics.catches")} value={stats.totalCatches} />
-      </View>
-      <View style={styles.gridRow}>
-        <MetricCard label={t("metrics.contacts")} value={stats.totalContacts} />
-        <MetricCard label={t("stats.following")} value={stats.totalFollowing} />
+      {/* a) Overview — 4 hero tiles */}
+      <View style={styles.heroGrid}>
+        <StatTileHero icon="eye-outline"      value={stats.totalFollowing} label={t("stats.following")}        color={SEG_COLORS.following} />
+        <StatTileHero icon="flash-outline"    value={stats.totalContacts}  label={t("stats.tileHug")}          color={SEG_COLORS.contacts} />
+        <StatTileHero icon="fish-outline"     value={stats.totalCatches}   label={t("metrics.catches")}        color={SEG_COLORS.catches} />
+        <StatTileHero icon="close-circle-outline" value={totalLost}        label={t("stats.lost")}             color={SEG_COLORS.lost} />
       </View>
 
       {/* b) Averages — stat tiles */}
@@ -496,54 +661,33 @@ export default function StatsScreen() {
         })}
       </Text>
 
-      {/* c) Monthly chart */}
+      {/* c) Monthly stacked chart */}
       <SectionHeader title={t("stats.monthlyChart")} />
       <GlassCard style={styles.panel}>
-        <View style={styles.chartSelector}>
-          {(["catches", "contacts", "following", "species"] as ChartMode[]).map((mode) => (
-            <Pressable
-              key={mode}
-              style={[styles.chartPill, chartMode === mode && styles.chartPillActive]}
-              onPress={() => setChartMode(mode)}
-            >
-              <Text style={[styles.chartPillText, chartMode === mode && styles.chartPillTextActive]}>
-                {mode === "catches"   ? t("metrics.catches")
-                : mode === "contacts"  ? t("metrics.contacts")
-                : mode === "following" ? t("stats.following")
-                :                        t("stats.chartBySpecies")}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {chartMode === "species" ? (
-          speciesData.length > 0
-            ? <SpeciesChart data={speciesData} />
-            : <ChartNoData label={noDataLabel} />
+        {monthlyData.some((b) => b.catches + b.contacts + b.following + b.lost > 0) ? (
+          <View style={styles.stackedChartWrap}>
+            <StackedMonthlyChart data={monthlyData} />
+            <StackedChartLegend t={t} />
+          </View>
         ) : (
-          monthlyData.some((b) => b[chartMode] > 0)
-            ? <View style={styles.monthlyWrap}><MonthlyBarChart data={monthlyData} mode={chartMode} /></View>
-            : <ChartNoData label={noDataLabel} />
+          <ChartNoData label={noDataLabel} />
         )}
       </GlassCard>
 
-      {/* d) Best time of day — text label + 24h strip */}
+      {/* c2) By species */}
+      <SectionHeader title={t("stats.chartBySpecies")} />
+      <GlassCard style={styles.panel}>
+        {speciesData.length > 0
+          ? <SpeciesChart data={speciesData} />
+          : <ChartNoData label={noDataLabel} />}
+      </GlassCard>
+
+      {/* d) Most active times — donut ring by period */}
       <SectionHeader title={t("stats.bestTime")} />
       <GlassCard style={styles.panel}>
-        {stats.bestTimeOfDay ? (
-          <Text style={styles.lineStrong}>
-            {t(`stats.timeOfDay.${timeOfDayKey(stats.bestTimeOfDay)}`)}
-            {"  "}
-            <Text style={styles.timeRange}>{stats.bestTimeOfDay}</Text>
-          </Text>
-        ) : (
-          <Text style={styles.lineMuted}>{t("stats.notEnoughCatches")}</Text>
-        )}
-        <View style={styles.stripWrap}>
-          {hasHourData
-            ? <DayStrip hourCounts={stats.catchHourCounts} bestTimeOfDay={stats.bestTimeOfDay} />
-            : <ChartNoData label={noDataLabel} />}
-        </View>
+        {hasHourData
+          ? <TimeOfDayRing hourCounts={stats.catchHourCounts} />
+          : <ChartNoData label={noDataLabel} />}
       </GlassCard>
 
       {/* d) Catches by wind direction — compass rose */}
@@ -580,17 +724,36 @@ export default function StatsScreen() {
         )}
       </GlassCard>
 
-      {/* f) Best conditions */}
+      {/* f) Top conditions */}
       <SectionHeader title={t("stats.bestConditionsTitle")} />
       <GlassCard style={styles.panel}>
-        {bestCond && (bestCond.waterTempRange || bestCond.windDirection) ? (
-          <Text style={styles.lineStrong}>
-            {t("stats.bestConditionsText", {
-              temp: bestCond.waterTempRange ?? "–",
-              wind: bestCond.windDirection ?? "–",
-              speed: bestCond.windSpeedAvg != null ? String(bestCond.windSpeedAvg) : "–",
-            })}
-          </Text>
+        {bestCond && (bestCond.waterTempRange || bestCond.windDirection || bestCond.pressureAvg) ? (
+          <View style={styles.condRows}>
+            {bestCond.waterTempRange ? (
+              <View style={styles.condRow}>
+                <Ionicons name="thermometer-outline" size={18} color={Colors.amber} />
+                <Text style={styles.condLabel}>{t("stats.condTemp")}</Text>
+                <Text style={styles.condValue}>{bestCond.waterTempRange}</Text>
+              </View>
+            ) : null}
+            {bestCond.windDirection ? (
+              <View style={styles.condRow}>
+                <Ionicons name="navigate-outline" size={18} color={Colors.amber} />
+                <Text style={styles.condLabel}>{t("stats.condWind")}</Text>
+                <Text style={styles.condValue}>
+                  {bestCond.windDirection}
+                  {bestCond.windSpeedAvg != null ? `  ${bestCond.windSpeedAvg} m/s` : ""}
+                </Text>
+              </View>
+            ) : null}
+            {bestCond.pressureAvg != null ? (
+              <View style={styles.condRow}>
+                <Ionicons name="speedometer-outline" size={18} color={Colors.amber} />
+                <Text style={styles.condLabel}>{t("stats.condPressure")}</Text>
+                <Text style={styles.condValue}>{bestCond.pressureAvg} hPa</Text>
+              </View>
+            ) : null}
+          </View>
         ) : (
           <Text style={styles.lineMuted}>{t("stats.bestConditionsNoData")}</Text>
         )}
@@ -961,5 +1124,122 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.heading,
     fontSize: 14,
     letterSpacing: 0
+  },
+
+  // ── Time-of-day ring ──
+  ringWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  ringLegend: {
+    flex: 1,
+    gap: 10,
+  },
+  ringLegendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ringLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  ringLegendLabel: {
+    flex: 1,
+    color: Colors.text,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
+  ringLegendCount: {
+    fontFamily: Fonts.black,
+    fontSize: 16,
+    letterSpacing: 0,
+  },
+
+  // ── Top conditions ──
+  condRows: {
+    gap: 12,
+  },
+  condRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  condLabel: {
+    flex: 1,
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
+  condValue: {
+    color: Colors.text,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 13,
+    letterSpacing: 0,
+    textAlign: "right",
+  },
+
+  // ── Hero stat tiles ──
+  heroGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4,
+  },
+  heroTile: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    gap: 4,
+  },
+  heroIcon: {
+    marginBottom: 2,
+  },
+  heroValue: {
+    color: Colors.text,
+    fontFamily: Fonts.black,
+    fontSize: 22,
+    letterSpacing: 0,
+    lineHeight: 26,
+  },
+  heroLabel: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    textAlign: "center",
+  },
+
+  // ── Stacked chart ──
+  stackedChartWrap: {
+    gap: 10,
+  },
+  stackLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
+  stackLegendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  stackLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  stackLegendLabel: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    letterSpacing: 0,
   },
 });

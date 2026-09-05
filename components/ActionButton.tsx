@@ -82,7 +82,7 @@ export function ActionButton({
             <View style={styles.iconBubbleCompact}>
               <Ionicons name={icon} size={22} color={fg} />
             </View>
-            <Text style={[styles.labelCompact, { color: fg }]}>{label}</Text>
+            <Text style={[styles.labelCompact, { color: fg }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</Text>
           </>
         ) : (
           // Full-width: horizontal pill (icon left, label right)
