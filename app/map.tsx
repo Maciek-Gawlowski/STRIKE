@@ -86,8 +86,10 @@ export default function MapScreen() {
     try {
       const dest = `${FileSystem.documentDirectory}photo-${Date.now()}.jpg`;
       await FileSystem.copyAsync({ from: uri, to: dest });
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       addEvent("photo", { photoUri: dest });
     } catch {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       addEvent("photo", { photoUri: uri });
     }
   };

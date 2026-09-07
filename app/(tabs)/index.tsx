@@ -67,6 +67,7 @@ function suggestTripName(location: Coordinate | null, trips: Trip[]): string | n
 
 /** Amber pill that breathes in/out while a trip is active. */
 function LiveBadge() {
+  const { t } = useTranslation();
   const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const anim = Animated.loop(
@@ -81,7 +82,7 @@ function LiveBadge() {
   return (
     <Animated.View style={[liveBadge.root, { opacity }]}>
       <View style={liveBadge.dot} />
-      <Text style={liveBadge.text}>LIVE</Text>
+      <Text style={liveBadge.text}>{t("home.live")}</Text>
     </Animated.View>
   );
 }
@@ -246,8 +247,10 @@ export default function HomeScreen() {
     try {
       const dest = `${FileSystem.documentDirectory}photo-${Date.now()}.jpg`;
       await FileSystem.copyAsync({ from: uri, to: dest });
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       addEvent("photo", { photoUri: dest });
     } catch {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       addEvent("photo", { photoUri: uri });
     }
   }, [addEvent, t]);

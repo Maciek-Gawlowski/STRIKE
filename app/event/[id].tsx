@@ -229,7 +229,7 @@ export default function EventDetailScreen() {
           <Ionicons name="chevron-back" size={22} color={Colors.text} />
           <Text style={styles.backInlineText}>{t("common.back")}</Text>
         </Pressable>
-        <Text style={styles.notFound}>Event not found.</Text>
+        <Text style={styles.notFound}>{t("errors.eventNotFound" as never)}</Text>
       </Screen>
     );
   }

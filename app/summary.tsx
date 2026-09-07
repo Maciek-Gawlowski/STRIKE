@@ -120,10 +120,10 @@ export default function SummaryScreen() {
   const conditionChips: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string }[] = [];
   if (tripWeather) {
     if (tripWeather.airTemp != null) {
-      conditionChips.push({ icon: "thermometer-outline", label: `${Math.round(tripWeather.airTemp)}°C luft` });
+      conditionChips.push({ icon: "thermometer-outline", label: t("weather.air", { v: Math.round(tripWeather.airTemp) }) });
     }
     if (tripWeather.waterTemp != null) {
-      conditionChips.push({ icon: "water-outline", label: `${Math.round(tripWeather.waterTemp)}°C vand` });
+      conditionChips.push({ icon: "water-outline", label: t("weather.water", { v: Math.round(tripWeather.waterTemp) }) });
     }
     if (tripWeather.windSpeed != null) {
       const dir = tripWeather.windDirection

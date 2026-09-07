@@ -129,7 +129,8 @@
     "gpsWaiting": "Waiting for GPS…",
     "gpsWaitingHint": "GPS signal pending — your trip is already recording.",
     "timeline": "Timeline",
-    "replay": "Replay route"
+    "replay": "Replay route",
+    "reviewKicker": "TRIP REVIEW"
   },
   "catch": {
     "kicker": "NEW CATCH",
@@ -153,7 +154,24 @@
     "addPhoto": "Add photo",
     "noYetCatch": "Log a catch first to attach a photo",
     "attachToWhich": "Attach photo to catch:",
-    "cameraPermissionDenied": "Camera access denied"
+    "cameraPermissionDenied": "Camera access denied",
+    "speciesList": {
+      "havoerred": "Sea trout",
+      "laks": "Salmon",
+      "gedde": "Pike",
+      "torsk": "Cod",
+      "aborre": "Perch",
+      "hornfisk": "Garfish",
+      "makrel": "Mackerel",
+      "bækørred": "Brown trout",
+      "rødspætte": "Plaice",
+      "stalling": "Grayling",
+      "skrubbe": "Flounder",
+      "pighvar": "Turbot",
+      "suder": "Tench",
+      "karpe": "Carp",
+      "other": "Other"
+    }
   },
   "catchDetail": {
     "kicker": "CATCH DETAILS",
@@ -441,5 +459,9 @@
     "filterSpecies": "Species",
     "filterEventType": "Activity type",
     "filterMapType": "Map type"
+  },
+  "errors": {
+    "tripNotFound": "Trip not found",
+    "eventNotFound": "Event not found"
   }
 }

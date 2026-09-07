@@ -31,7 +31,7 @@ export default function TripReviewScreen() {
           <Ionicons name="chevron-back" size={22} color={Colors.text} />
           <Text style={styles.backText}>{t("common.back")}</Text>
         </Pressable>
-        <Text style={styles.title}>Trip not found</Text>
+        <Text style={styles.title}>{t("errors.tripNotFound" as never)}</Text>
       </Screen>
     );
   }
@@ -118,7 +118,7 @@ export default function TripReviewScreen() {
       </View>
 
       <View>
-        <Text style={styles.kicker}>TRIP REVIEW</Text>
+        <Text style={styles.kicker}>{t("trip.reviewKicker")}</Text>
         {editingName ? (
           <View style={styles.renameRow}>
             <TextInput
@@ -176,14 +176,17 @@ export default function TripReviewScreen() {
           const typeColor =
             event.type === "catch" ? Colors.catchGreen :
             event.type === "following" ? "#5AA9E6" :
+            event.type === "photo" ? "#9B59B6" :
             event.type === "lure" ? "#a78bfa" : "#f4c84f";
           const typeIcon: React.ComponentProps<typeof Ionicons>["name"] =
             event.type === "catch" ? "fish-outline" :
             event.type === "following" ? "eye-outline" :
+            event.type === "photo" ? "camera-outline" :
             event.type === "lure" ? "pricetag-outline" : "flash-outline";
           const typeLabel =
             event.type === "catch" ? (event.species ?? t("events.catch")) :
             event.type === "following" ? t("events.following") :
+            event.type === "photo" ? t("events.photo") :
             event.type === "lure" ? t("events.lure", { name: event.comment ?? "" }) :
             t("events.contact");
           const timeStr = new Date(event.timestamp).toLocaleTimeString([], {

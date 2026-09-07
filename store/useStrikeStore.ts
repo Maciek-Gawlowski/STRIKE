@@ -137,7 +137,7 @@ const demoTrips: Trip[] = [
         type: "catch",
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 28.7).toISOString(),
         position: { latitude: 55.282, longitude: 12.4545 },
-        species: "Sea trout",
+        species: "Havørred",
         comment: "Bright fish on a small tobisen fly.",
         kept: false
       }

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { TripMap } from "@/components/TripMap";
@@ -11,6 +12,17 @@ import { Fonts } from "@/theme/fonts";
 export default function LogbookScreen() {
   const { t } = useTranslation();
   const trips = useStrikeStore((state) => state.trips);
+
+  const groupedTrips = useMemo(() => {
+    const groups = new Map<string, typeof trips>();
+    for (const trip of trips) {
+      const key = new Date(trip.startedAt).toLocaleDateString([], { year: "numeric", month: "long" });
+      const existing = groups.get(key) ?? [];
+      existing.push(trip);
+      groups.set(key, existing);
+    }
+    return Array.from(groups.entries());
+  }, [trips]);
 
   return (
     <Screen>
@@ -39,29 +51,46 @@ export default function LogbookScreen() {
       ) : null}
 
       <View style={styles.list}>
-        {trips.map((trip) => {
-          const catches = trip.events.filter((event) => event.type === "catch").length;
-          const contacts = trip.events.filter((event) => event.type === "contact").length;
-
+        {groupedTrips.map(([monthLabel, monthTrips]) => {
+          const monthCatches = monthTrips.reduce(
+            (sum, trip) => sum + trip.events.filter((e) => e.type === "catch").length, 0
+          );
           return (
-            <Pressable key={trip.id} style={styles.card} onPress={() => router.push(`/trip/${trip.id}`)}>
-              {trip.route.length > 1 ? (
-                <TripMap route={trip.route} events={trip.events} height={90} interactive={false} />
-              ) : null}
-              <View style={[styles.cardTop, trip.route.length > 1 && styles.cardTopMap]}>
-                <View>
-                  <Text style={styles.date}>{trip.title}</Text>
-                  <Text style={styles.place}>{new Date(trip.startedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+            <View key={monthLabel}>
+              <View style={styles.monthHeader}>
+                <Text style={styles.monthLabel}>{monthLabel}</Text>
+                <Text style={styles.monthCatchCount}>{t("logbook.catchesCount", { count: monthCatches })}</Text>
               </View>
-              <View style={styles.stats}>
-                <Text style={styles.stat}>{formatDuration(trip.startedAt, trip.endedAt)}</Text>
-                <Text style={styles.stat}>{formatDistance(trip.distanceMeters)}</Text>
-                <Text style={styles.stat}>{t("logbook.catchesCount", { count: catches })}</Text>
-                <Text style={styles.stat}>{t("logbook.contactsCount", { count: contacts })}</Text>
-              </View>
-            </Pressable>
+              {monthTrips.map((trip) => {
+                const catches = trip.events.filter((event) => event.type === "catch").length;
+                const contacts = trip.events.filter((event) => event.type === "contact").length;
+                const tierColor = catches >= 3 ? Colors.amber : catches >= 1 ? Colors.borderStrong : Colors.border;
+                return (
+                  <Pressable
+                    key={trip.id}
+                    style={[styles.card, { borderLeftWidth: 3, borderLeftColor: tierColor }]}
+                    onPress={() => router.push(`/trip/${trip.id}`)}
+                  >
+                    {trip.route.length > 1 ? (
+                      <TripMap route={trip.route} events={trip.events} height={90} interactive={false} />
+                    ) : null}
+                    <View style={[styles.cardTop, trip.route.length > 1 && styles.cardTopMap]}>
+                      <View>
+                        <Text style={styles.date}>{trip.title}</Text>
+                        <Text style={styles.place}>{new Date(trip.startedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                    </View>
+                    <View style={styles.stats}>
+                      <Text style={styles.stat}>{formatDuration(trip.startedAt, trip.endedAt)}</Text>
+                      <Text style={styles.stat}>{formatDistance(trip.distanceMeters)}</Text>
+                      <Text style={styles.stat}>{t("logbook.catchesCount", { count: catches })}</Text>
+                      <Text style={styles.stat}>{t("logbook.contactsCount", { count: contacts })}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           );
         })}
       </View>
@@ -137,7 +166,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0
   },
   list: {
-    gap: 12
+    gap: 20
+  },
+  monthHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 2,
+    paddingBottom: 8,
+  },
+  monthLabel: {
+    color: Colors.textBright,
+    fontFamily: Fonts.heading,
+    fontSize: 16,
+    letterSpacing: 0,
+  },
+  monthCatchCount: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 12,
+    letterSpacing: 0,
   },
   card: {
     borderRadius: 24,

@@ -48,33 +48,7 @@ const LANGUAGE_OPTIONS: { value: Locale; labelKey: string }[] = [
 const FISHING_METHOD_KEYS = ["spin", "flue", "medefiskeri", "andet"] as const;
 const FISHING_LOCATION_KEYS = ["kyst", "aa", "soe", "putOgTake"] as const;
 
-type SpeciesEntry = { key: string; label: string };
-
-// Freshwater species — Gedde and Havørred appear in both lists per spec.
-const FRESHWATER_SPECIES: SpeciesEntry[] = [
-  { key: "gedde",     label: "Gedde" },
-  { key: "aborre",    label: "Aborre" },
-  { key: "laks",      label: "Laks" },
-  { key: "bækørred",  label: "Bækørred" },
-  { key: "stalling",  label: "Stalling" },
-  { key: "suder",     label: "Suder" },
-  { key: "karpe",     label: "Karpe" },
-  { key: "havoerred", label: "Havørred" },
-];
-
-// Saltwater species — Fladfisk shown flat (Rødspætte, Skrubbe, Pighvar).
-// TODO: Confirm with user whether to group under collapsible "Fladfisk" header.
-const SALTWATER_SPECIES: SpeciesEntry[] = [
-  { key: "havoerred", label: "Havørred" },
-  { key: "laks",      label: "Laks" },
-  { key: "torsk",     label: "Torsk" },
-  { key: "hornfisk",  label: "Hornfisk" },
-  { key: "makrel",    label: "Makrel" },
-  { key: "rødspætte", label: "Rødspætte" },
-  { key: "skrubbe",   label: "Skrubbe" },
-  { key: "pighvar",   label: "Pighvar" },
-  { key: "gedde",     label: "Gedde" },
-];
+import { FRESHWATER_SPECIES, SALTWATER_SPECIES } from "@/constants/species";
 
 type LureFormState = {
   name: string;
@@ -390,7 +364,7 @@ export default function ProfileScreen() {
                 const active = speciesKeys.includes(sp.key);
                 return (
                   <Pressable key={sp.key} style={[styles.pillSpecies, active && styles.pillActive]} onPress={() => toggleSpecies(sp.key)}>
-                    <Text style={[styles.pillText, active && styles.pillTextActive]}>{sp.label}</Text>
+                    <Text style={[styles.pillText, active && styles.pillTextActive]}>{t(sp.labelKey as never)}</Text>
                   </Pressable>
                 );
               })}

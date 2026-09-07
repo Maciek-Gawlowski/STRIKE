@@ -129,7 +129,8 @@
     "gpsWaiting": "Henter position…",
     "gpsWaitingHint": "Venter på GPS-signal — turen er allerede i gang.",
     "timeline": "Tidslinje",
-    "replay": "Afspil rute"
+    "replay": "Afspil rute",
+    "reviewKicker": "TUR-GENNEMGANG"
   },
   "catch": {
     "kicker": "NY FANGST",
@@ -153,7 +154,24 @@
     "addPhoto": "Tilføj foto",
     "noYetCatch": "Registrér en fangst først for at tilknytte et foto",
     "attachToWhich": "Tilknyt foto til fangst:",
-    "cameraPermissionDenied": "Kameraadgang nægtet"
+    "cameraPermissionDenied": "Kameraadgang nægtet",
+    "speciesList": {
+      "havoerred": "Havørred",
+      "laks": "Laks",
+      "gedde": "Gedde",
+      "torsk": "Torsk",
+      "aborre": "Aborre",
+      "hornfisk": "Hornfisk",
+      "makrel": "Makrel",
+      "bækørred": "Bækørred",
+      "rødspætte": "Rødspætte",
+      "stalling": "Stalling",
+      "skrubbe": "Skrubbe",
+      "pighvar": "Pighvar",
+      "suder": "Suder",
+      "karpe": "Karpe",
+      "other": "Anden art"
+    }
   },
   "catchDetail": {
     "kicker": "FANGSTDETALJER",
@@ -441,5 +459,9 @@
     "filterSpecies": "Art",
     "filterEventType": "Aktivitetstype",
     "filterMapType": "Korttype"
+  },
+  "errors": {
+    "tripNotFound": "Tur ikke fundet",
+    "eventNotFound": "Hændelse ikke fundet"
   }
 }

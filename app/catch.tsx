@@ -15,7 +15,7 @@ import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
 
-const species = ["Sea trout", "Brown trout", "Rainbow trout", "Garfish", "Other"];
+import { ALL_SPECIES } from "@/constants/species";
 
 export default function CatchScreen() {
   const { t } = useTranslation();
@@ -26,7 +26,7 @@ export default function CatchScreen() {
   const waterLevel = useStrikeStore((state) => state.waterLevel);
   const refreshWeather = useStrikeStore((state) => state.refreshWeather);
   const [photoUri, setPhotoUri] = useState<string | undefined>();
-  const [selectedSpecies, setSelectedSpecies] = useState(species[0]);
+  const [selectedSpecies, setSelectedSpecies] = useState(() => t("catch.speciesList.havoerred"));
   const [comment, setComment] = useState("");
   const [kept, setKept] = useState(false);
   const [speciesOpen, setSpeciesOpen] = useState(false);
@@ -299,19 +299,22 @@ export default function CatchScreen() {
       <Modal visible={speciesOpen} transparent animationType="fade" onRequestClose={() => setSpeciesOpen(false)}>
         <Pressable style={styles.modalScrim} onPress={() => setSpeciesOpen(false)}>
           <View style={styles.modalCard}>
-            {species.map((item) => (
-              <Pressable
-                key={item}
-                style={styles.option}
-                onPress={() => {
-                  setSelectedSpecies(item);
-                  setSpeciesOpen(false);
-                }}
-              >
-                <Text style={styles.optionText}>{item}</Text>
-                {item === selectedSpecies ? <Ionicons name="checkmark" size={20} color={Colors.amber} /> : null}
-              </Pressable>
-            ))}
+            {ALL_SPECIES.map((sp) => {
+              const label = t(sp.labelKey as never);
+              return (
+                <Pressable
+                  key={sp.key}
+                  style={styles.option}
+                  onPress={() => {
+                    setSelectedSpecies(label);
+                    setSpeciesOpen(false);
+                  }}
+                >
+                  <Text style={styles.optionText}>{label}</Text>
+                  {label === selectedSpecies ? <Ionicons name="checkmark" size={20} color={Colors.amber} /> : null}
+                </Pressable>
+              );
+            })}
           </View>
         </Pressable>
       </Modal>

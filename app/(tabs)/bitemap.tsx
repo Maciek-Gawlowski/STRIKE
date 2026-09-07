@@ -52,22 +52,7 @@ const TIME_TABS: TimeTab[] = [
   { val: "custom", labelKey: "bitemap.customRange" },
 ];
 
-const ALL_SPECIES = [
-  { key: "havoerred", label: "Havørred" },
-  { key: "laks",      label: "Laks" },
-  { key: "gedde",     label: "Gedde" },
-  { key: "torsk",     label: "Torsk" },
-  { key: "aborre",    label: "Aborre" },
-  { key: "hornfisk",  label: "Hornfisk" },
-  { key: "makrel",    label: "Makrel" },
-  { key: "bækørred",  label: "Bækørred" },
-  { key: "stalling",  label: "Stalling" },
-  { key: "rødspætte", label: "Rødspætte" },
-  { key: "skrubbe",   label: "Skrubbe" },
-  { key: "pighvar",   label: "Pighvar" },
-  { key: "suder",     label: "Suder" },
-  { key: "karpe",     label: "Karpe" },
-] as const;
+import { ALL_SPECIES } from "@/constants/species";
 
 const EVENT_TYPE_OPTIONS = [
   { key: "catch",     labelKey: "events.catch" },
@@ -583,7 +568,7 @@ export default function BiteMapScreen() {
             {/* Species */}
             <Text style={styles.sheetSectionTitle}>{t("bitemap.filterSpecies")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterStrip}>
-              {ALL_SPECIES.map((sp) => (
+              {ALL_SPECIES.filter((s) => s.key !== "other").map((sp) => (
                 <Pressable
                   key={sp.key}
                   style={[styles.filterChip, speciesFilter === sp.key && styles.filterChipActive]}
@@ -593,7 +578,7 @@ export default function BiteMapScreen() {
                   }}
                 >
                   <Text style={[styles.filterChipText, speciesFilter === sp.key && styles.filterChipTextActive]}>
-                    {sp.label}
+                    {t(sp.labelKey as never)}
                   </Text>
                 </Pressable>
               ))}

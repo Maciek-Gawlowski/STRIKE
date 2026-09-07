@@ -149,7 +149,7 @@ export default function ShareScreen() {
           <Ionicons name="chevron-back" size={22} color={Colors.text} />
           <Text style={styles.backText}>{t("common.back")}</Text>
         </Pressable>
-        <Text style={styles.emptyText}>Trip not found.</Text>
+        <Text style={styles.emptyText}>{t("errors.tripNotFound" as never)}</Text>
       </View>
     );
   }

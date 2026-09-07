@@ -6,7 +6,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "icon": "./assets/logo.png",
+    "icon": "./assets/LOGO.1024x1024.png",
     "backgroundColor": "#0D1B2A",
     "splash": {
       "backgroundColor": "#0D1B2A"
