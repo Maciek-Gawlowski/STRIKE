@@ -28,12 +28,14 @@ const markerColors = {
   contact:   "#f4c84f",
   following: "#5AA9E6",
   catch:     Colors.catchGreen,
+  photo:     "#9B59B6",
 };
 
 const markerIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
   contact:   "flash-outline",
   following: "eye-outline",
   catch:     "fish-outline",
+  photo:     "camera-outline",
 };
 
 function EventPin({ type }: { type: string }) {

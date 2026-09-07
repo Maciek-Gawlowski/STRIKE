@@ -223,10 +223,10 @@ function DayStrip({
 // ── Time-of-day donut ring ────────────────────────────────────────────────────
 
 const TOD_PERIODS = [
-  { key: "morning",   label: "Morgen",    hours: [5,6,7,8,9,10,11],         color: "#F5A623" },
-  { key: "afternoon", label: "Eftermiddag", hours: [12,13,14,15,16,17],     color: "#FF6A00" },
-  { key: "evening",   label: "Aften",     hours: [18,19,20],                color: "#3A86B0" },
-  { key: "night",     label: "Nat",       hours: [21,22,23,0,1,2,3,4],      color: "#4a5e6e" },
+  { key: "morning",   i18nKey: "stats.timeOfDay.morning",   hours: [5,6,7,8,9,10,11],     color: "#F5A623" },
+  { key: "afternoon", i18nKey: "stats.timeOfDay.afternoon", hours: [12,13,14,15,16,17],   color: "#FF6A00" },
+  { key: "evening",   i18nKey: "stats.timeOfDay.evening",   hours: [18,19,20],            color: "#3A86B0" },
+  { key: "night",     i18nKey: "stats.timeOfDay.night",     hours: [21,22,23,0,1,2,3,4],  color: "#4a5e6e" },
 ] as const;
 
 function polarToCart(cx: number, cy: number, r: number, angleDeg: number): [number, number] {
@@ -245,9 +245,10 @@ function donutArcPath(cx: number, cy: number, outerR: number, innerR: number, st
 
 const RING_SIZE = 140, RING_CX = 70, RING_CY = 70, RING_OUTER = 58, RING_INNER = 36;
 
-function TimeOfDayRing({ hourCounts }: { hourCounts: number[] }) {
+function TimeOfDayRing({ hourCounts, t }: { hourCounts: number[]; t: (k: string) => string }) {
   const counts = TOD_PERIODS.map((p) => ({
     ...p,
+    label: t(p.i18nKey),
     count: p.hours.reduce((s: number, h) => s + (hourCounts[h] ?? 0), 0),
   }));
   const total = counts.reduce((s, c) => s + c.count, 0);
@@ -290,7 +291,7 @@ function TimeOfDayRing({ hourCounts }: { hourCounts: number[] }) {
         {total > 0 && (
           <SvgText x={RING_CX} y={RING_CY + 9} textAnchor="middle"
             fill={Colors.textMuted} fontSize={8} fontFamily={Fonts.body}>
-            {best.count} fangster
+            {best.count} {t("metrics.catches").toLowerCase()}
           </SvgText>
         )}
       </Svg>
@@ -686,7 +687,7 @@ export default function StatsScreen() {
       <SectionHeader title={t("stats.bestTime")} />
       <GlassCard style={styles.panel}>
         {hasHourData
-          ? <TimeOfDayRing hourCounts={stats.catchHourCounts} />
+          ? <TimeOfDayRing hourCounts={stats.catchHourCounts} t={t} />
           : <ChartNoData label={noDataLabel} />}
       </GlassCard>
 

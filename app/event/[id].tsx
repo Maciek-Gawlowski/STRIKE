@@ -40,6 +40,7 @@ const TYPE_COLORS = {
   contact:   "#F4C84F",
   following: "#5AA9E6",
   lure:      "#a78bfa",
+  photo:     "#9B59B6",
 } as const;
 
 const TYPE_ICONS = {
@@ -47,6 +48,7 @@ const TYPE_ICONS = {
   contact:   "flash-outline",
   following: "eye-outline",
   lure:      "pricetag-outline",
+  photo:     "camera-outline",
 } as const satisfies Record<string, React.ComponentProps<typeof Ionicons>["name"]>;
 
 type EditFields = {
@@ -92,6 +94,17 @@ export default function EventDetailScreen() {
 
   const updateEvent = useStrikeStore((state) => state.updateEvent);
   const waterLevel = useStrikeStore((state) => state.waterLevel);
+
+  // For photo events: list of catches in the same trip, used for the attach picker.
+  const tripCatches = useStrikeStore((state) => {
+    for (const trip of [state.activeTrip, ...state.trips]) {
+      if (!trip) continue;
+      if (trip.events.some((e) => e.id === id)) {
+        return trip.events.filter((e) => e.type === "catch");
+      }
+    }
+    return [];
+  });
 
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const [lure, setLure] = useState<Lure | null>(null);
@@ -222,12 +235,15 @@ export default function EventDetailScreen() {
   }
 
   const isCatch = event.type === "catch";
-  const typeColor = TYPE_COLORS[event.type] ?? "#ffffff";
-  const typeIcon  = TYPE_ICONS[event.type]  ?? "ellipse-outline";
+  const isPhoto = event.type === "photo";
+  const typeColor = TYPE_COLORS[event.type as keyof typeof TYPE_COLORS] ?? "#ffffff";
+  const typeIcon  = TYPE_ICONS[event.type as keyof typeof TYPE_ICONS]   ?? "ellipse-outline";
   const typeKicker =
-    isCatch ? t("catchDetail.kicker") :
-    event.type === "contact" ? t("events.contact").toUpperCase() :
-    t("events.following").toUpperCase();
+    isCatch   ? t("catchDetail.kicker") :
+    isPhoto   ? t("events.photo").toUpperCase() :
+    event.type === "contact"   ? t("events.contact").toUpperCase() :
+    event.type === "following" ? t("events.following").toUpperCase() :
+    event.type.toUpperCase();
 
   const miniRoute = [event.position, event.position];
   const dateStr = new Date(event.timestamp).toLocaleDateString([], {
@@ -249,7 +265,7 @@ export default function EventDetailScreen() {
 
       {/* ── Hero ── */}
       <View style={styles.hero}>
-        {isCatch ? (
+        {(isCatch || isPhoto) ? (
           hasPhoto ? (
             <Image source={{ uri: displayPhotoUri }} style={styles.heroImage} resizeMode="cover" />
           ) : (
@@ -309,6 +325,31 @@ export default function EventDetailScreen() {
                 {hasPhoto ? t("eventEdit.changePhoto") : t("eventEdit.addPhoto")}
               </Text>
             </Pressable>
+          ) : null}
+          {isEditing && isPhoto && hasPhoto ? (
+            tripCatches.length > 0 ? (
+              <View style={styles.attachCatchWrap}>
+                <Text style={styles.attachCatchLabel}>{t("eventEdit.attachToCatch")}</Text>
+                {tripCatches.map((c, idx) => (
+                  <Pressable
+                    key={c.id}
+                    style={styles.changePhotoBtn}
+                    onPress={() => {
+                      if (!tripId || !edit.photoUri) return;
+                      updateEvent(tripId, { ...c, photoUri: edit.photoUri });
+                      setEdit((p) => ({ ...p, photoUri: undefined }));
+                    }}
+                  >
+                    <Ionicons name="fish-outline" size={14} color={Colors.textBright} />
+                    <Text style={styles.changePhotoBtnText}>
+                      {c.species?.trim() ? c.species : `${t("events.catch")} ${idx + 1}`}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.attachCatchNone}>{t("eventEdit.noCatchesToAttach")}</Text>
+            )
           ) : null}
         </View>
       </View>
@@ -1011,5 +1052,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingTop: 40,
     textAlign: "center"
-  }
+  },
+  attachCatchWrap: {
+    gap: 6,
+    marginTop: 4,
+  },
+  attachCatchLabel: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  attachCatchNone: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    letterSpacing: 0,
+    fontStyle: "italic",
+  },
 });

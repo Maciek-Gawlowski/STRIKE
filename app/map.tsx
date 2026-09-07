@@ -32,7 +32,6 @@ export default function MapScreen() {
   const currentLocation = useStrikeStore((state) => state.currentLocation);
   const addEvent = useStrikeStore((state) => state.addEvent);
   const addCatch = useStrikeStore((state) => state.addCatch);
-  const updateEvent = useStrikeStore((state) => state.updateEvent);
   const stopTrip = useStrikeStore((state) => state.stopTrip);
   const mapType = useStrikeStore((state) => state.mapType);
   const setMapType = useStrikeStore((state) => state.setMapType);
@@ -42,8 +41,6 @@ export default function MapScreen() {
   const [now, setNow] = useState(Date.now());
   const [lures, setLures] = useState<Lure[]>([]);
   const [lurePickerOpen, setLurePickerOpen] = useState(false);
-  const [catchPickerOpen, setCatchPickerOpen] = useState(false);
-  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -77,64 +74,21 @@ export default function MapScreen() {
     ]).start();
   };
 
-  const handlePhoto = () => {
-    Alert.alert(t("catch.addPhoto"), undefined, [
-      {
-        text: t("catch.takePhoto"), onPress: async () => {
-          const perm = await ImagePicker.requestCameraPermissionsAsync();
-          if (perm.status !== "granted") {
-            Alert.alert(t("catch.cameraPermissionDenied") ?? "Camera access denied");
-            return;
-          }
-          const result = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.85 });
-          if (!result.canceled && result.assets[0]) {
-            await attachPhotoToTrip(result.assets[0].uri);
-          }
-        },
-      },
-      {
-        text: t("catch.chooseLibrary"), onPress: async () => {
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ["images"],
-            allowsEditing: false,
-            quality: 0.85,
-          });
-          if (!result.canceled && result.assets[0]) {
-            await attachPhotoToTrip(result.assets[0].uri);
-          }
-        },
-      },
-      { text: t("common.cancel"), style: "cancel" },
-    ]);
-  };
-
-  const attachPhotoToTrip = async (uri: string) => {
-    if (!activeTrip) return;
-    const catches = activeTrip.events.filter((e) => e.type === "catch");
-    if (catches.length === 0) {
-      // No catches yet — store photo temporarily, it will be discarded (nowhere to attach)
-      Alert.alert(t("catch.noYetCatch") ?? "Log a catch first to attach a photo");
+  const handlePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (perm.status !== "granted") {
+      Alert.alert(t("catch.cameraPermissionDenied") ?? "Camera access denied");
       return;
     }
-    if (catches.length === 1) {
-      await savePhotoToCatch(activeTrip.id, catches[0].id, uri);
-    } else {
-      // Multiple catches — let user pick which one
-      setPendingPhotoUri(uri);
-      setCatchPickerOpen(true);
-    }
-  };
-
-  const savePhotoToCatch = async (tripId: string, eventId: string, uri: string) => {
-    if (!activeTrip) return;
-    const event = activeTrip.events.find((e) => e.id === eventId);
-    if (!event) return;
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.85 });
+    if (result.canceled || !result.assets[0]) return;
+    const uri = result.assets[0].uri;
     try {
-      const dest = `${FileSystem.documentDirectory}strike_catch_${eventId}_${Date.now()}.jpg`;
+      const dest = `${FileSystem.documentDirectory}photo-${Date.now()}.jpg`;
       await FileSystem.copyAsync({ from: uri, to: dest });
-      updateEvent(tripId, { ...event, photoUri: dest });
+      addEvent("photo", { photoUri: dest });
     } catch {
-      updateEvent(tripId, { ...event, photoUri: uri });
+      addEvent("photo", { photoUri: uri });
     }
   };
 
@@ -278,31 +232,6 @@ export default function MapScreen() {
         </Pressable>
       </Modal>
 
-      {/* Catch picker — choose which catch to attach a photo to */}
-      <Modal visible={catchPickerOpen} transparent animationType="fade" onRequestClose={() => { setCatchPickerOpen(false); setPendingPhotoUri(null); }}>
-        <Pressable style={styles.modalScrim} onPress={() => { setCatchPickerOpen(false); setPendingPhotoUri(null); }}>
-          <View style={styles.modalCard}>
-            <Text style={styles.lureOptionText}>{t("catch.attachToWhich") ?? "Attach photo to catch:"}</Text>
-            {activeTrip?.events.filter((e) => e.type === "catch").map((event, idx) => (
-              <Pressable
-                key={event.id}
-                style={styles.lureOption}
-                onPress={() => {
-                  setCatchPickerOpen(false);
-                  if (pendingPhotoUri && activeTrip) {
-                    void savePhotoToCatch(activeTrip.id, event.id, pendingPhotoUri);
-                  }
-                  setPendingPhotoUri(null);
-                }}
-              >
-                <Text style={styles.lureOptionText}>
-                  {event.species?.trim() ? event.species : `${t("events.catch")} ${idx + 1}`}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
     </Screen>
   );
 }

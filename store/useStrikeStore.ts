@@ -32,7 +32,7 @@ export type Coordinate = {
   longitude: number;
 };
 
-export type StrikeEventType = "contact" | "following" | "catch" | "lure";
+export type StrikeEventType = "contact" | "following" | "catch" | "lure" | "photo";
 
 export type StrikeEvent = {
   id: string;
@@ -378,7 +378,10 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     }
 
     // Bite Map: upload area-level activity — h3Cell only, never exact GPS.
-    void uploadBiteMapEvent(event, h3Cell, state.weather);
+    // Photo events are not activity signals; skip upload.
+    if (type !== "photo") {
+      void uploadBiteMapEvent(event, h3Cell, state.weather);
+    }
 
     return event;
   },

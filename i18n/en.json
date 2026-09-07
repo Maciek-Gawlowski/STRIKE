@@ -22,7 +22,7 @@
     "stopTrip": "Stop Trip",
     "contact": "Contact",
     "following": "Following",
-    "newCatch": "New Catch",
+    "newCatch": "Catch",
     "saveCatch": "Save Catch",
     "newTrip": "New Trip",
     "openLogbook": "Open Logbook",
@@ -33,6 +33,7 @@
     "contact": "Contact",
     "following": "Following",
     "catch": "Catch",
+    "photo": "Photo",
     "lure": "Lure: {{name}}"
   },
   "metrics": {
@@ -101,7 +102,7 @@
     "recoverBody": "A trip from {{date}} was interrupted. Save it to your logbook or discard it.",
     "recoverSave": "Save to logbook",
     "recoverDiscard": "Discard",
-    "overblik": "OVERBLIK",
+    "overblik": "OVERVIEW",
     "miljoedata": "CONDITIONS",
     "senesteTure": "RECENT TRIPS",
     "counter": {
@@ -242,6 +243,7 @@
     "avgTileHoursPerCatch": "HOURS / CATCH",
     "avgTileMinPerContact": "MIN / CONTACT",
     "timeOfDay": {
+      "morning": "Morning",
       "earlyMorning": "Early morning",
       "lateMorning": "Late morning",
       "midday": "Midday",
@@ -396,6 +398,8 @@
     "changeLure": "Change lure",
     "changePhoto": "Change photo",
     "addPhoto": "Add photo",
+    "attachToCatch": "Attach to catch",
+    "noCatchesToAttach": "No catches on this trip to attach to",
     "kept": "Kept",
     "released": "Released",
     "weatherSection": "Recorded conditions",

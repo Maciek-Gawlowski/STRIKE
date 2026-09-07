@@ -22,7 +22,7 @@
     "stopTrip": "Stop tur",
     "contact": "Kontakt",
     "following": "Følger",
-    "newCatch": "Ny fangst",
+    "newCatch": "Fangst",
     "saveCatch": "Gem fangst",
     "newTrip": "Ny tur",
     "openLogbook": "Åbn logbog",
@@ -33,6 +33,7 @@
     "contact": "Kontakt",
     "following": "Følger",
     "catch": "Fangst",
+    "photo": "Foto",
     "lure": "Agn: {{name}}"
   },
   "metrics": {
@@ -242,6 +243,7 @@
     "avgTileHoursPerCatch": "TIMER PR. FANGST",
     "avgTileMinPerContact": "MIN PR. KONTAKT",
     "timeOfDay": {
+      "morning": "Morgen",
       "earlyMorning": "Tidlig morgen",
       "lateMorning": "Sen formiddag",
       "midday": "Middag",
@@ -396,6 +398,8 @@
     "changeLure": "Skift agn",
     "changePhoto": "Skift foto",
     "addPhoto": "Tilføj foto",
+    "attachToCatch": "Tilknyt til fangst",
+    "noCatchesToAttach": "Ingen fangster at tilknytte på denne tur",
     "kept": "Beholdt",
     "released": "Genudsat",
     "weatherSection": "Registrerede forhold",
