@@ -35,6 +35,10 @@ export type Statistics = {
 
 const WATER_TEMP_RANGES = ["<8°C", "8-12°C", "12-16°C", ">16°C"] as const;
 
+// Trips longer than this are treated as abandoned/forgotten and excluded from
+// averages so a single runaway session doesn't distort catches/trip, km/contact, etc.
+const MAX_TRIP_DURATION_S = 12 * 3600;
+
 function waterTempBucket(temp: number): string {
   if (temp < 8) {
     return WATER_TEMP_RANGES[0];
@@ -239,7 +243,8 @@ export async function getStatistics(): Promise<Statistics | null> {
             COALESCE(SUM(distance), 0) AS distance,
             COALESCE(SUM(duration), 0) AS duration
      FROM trips
-     WHERE end_time IS NOT NULL;`
+     WHERE end_time IS NOT NULL
+       AND (duration IS NULL OR duration <= ${MAX_TRIP_DURATION_S});`
   );
 
   const totalTrips = tripTotals?.trips ?? 0;
@@ -258,6 +263,7 @@ export async function getStatistics(): Promise<Statistics | null> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      WHERE t.end_time IS NOT NULL
+       AND (t.duration IS NULL OR t.duration <= ${MAX_TRIP_DURATION_S})
      GROUP BY e.type;`
   );
   const countByType: Record<string, number> = {};

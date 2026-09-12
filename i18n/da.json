@@ -11,11 +11,11 @@
     "seeAll": "Se alle"
   },
   "tabs": {
-    "home": "Hjem",
+    "home": "Start",
     "trips": "Ture",
-    "biteMap": "Bite Map",
-    "stats": "Statistik",
-    "profile": "Profil"
+    "biteMap": "Kort",
+    "stats": "Stats",
+    "profile": "Mig"
   },
   "actions": {
     "startTrip": "Start fisketur",
@@ -83,7 +83,7 @@
     "welcomeTitle": "Klar til din første tur?",
     "welcomeText": "Start en session, markér fiskeaktivitet, og tilføj et fangstfoto. STRIKE bygger din logbog automatisk.",
     "welcomeHint": "Tryk på knappen ovenfor for at begynde.",
-    "biteMapTitle": "BITE MAP",
+    "biteMapTitle": "AKTIVITETSKORT",
     "biteMapSub": "Se aktivitet i dit område",
     "openRouteMap": "Åbn live rutekort",
     "modalKicker": "NY TUR",
@@ -106,9 +106,9 @@
     "miljoedata": "MILJØDATA",
     "senesteTure": "SENESTE TURE",
     "counter": {
-      "contacts": "KONTAKTER",
+      "contacts": "HUG",
       "following": "FØLGER",
-      "catches": "LANDET"
+      "catches": "FANGST"
     }
   },
   "trip": {
@@ -116,11 +116,11 @@
     "noActiveTrip": "Ingen aktiv tur",
     "noActiveTripHint": "Start en fisketur fra Hjem for at tegne ruten.",
     "deleteConfirmTitle": "Slet tur",
-    "deleteTripConfirm": "Dette fjerner permanent turen og alle dens hændelser fra Bite Map. Det kan ikke fortrydes.",
+    "deleteTripConfirm": "Dette fjerner permanent turen og alle dens hændelser fra Aktivitetskortet. Det kan ikke fortrydes.",
     "deleteBtn": "Slet",
     "saveName": "Gem",
     "removeEventConfirmTitle": "Fjern hændelse",
-    "removeEventConfirm": "Dette fjerner hændelsen fra turen og sletter dens bidrag til Bite Map.",
+    "removeEventConfirm": "Dette fjerner hændelsen fra turen og sletter dens bidrag til Aktivitetskortet.",
     "removeEventBtn": "Fjern",
     "stopConfirmTitle": "Stop turen?",
     "stopConfirmBody": "Din rute og fangster er gemt.",
@@ -128,6 +128,10 @@
     "lastTimeHere": "Sidst her: {{catches}} fangster · {{contacts}} kontakter",
     "gpsWaiting": "Henter position…",
     "gpsWaitingHint": "Venter på GPS-signal — turen er allerede i gang.",
+    "longRunningTitle": "Fisker du stadig?",
+    "longRunningBody": "Din tur har kørt i over 6 timer. Fortsæt eller stop og gem den i logbogen.",
+    "longRunningContinue": "Fisker stadig",
+    "longRunningStop": "Stop tur",
     "timeline": "Tidslinje",
     "replay": "Afspil rute",
     "reviewKicker": "TUR-GENNEMGANG"
@@ -259,7 +263,7 @@
     "avgTileCatchesPerTrip": "FANGSTER PR. TUR",
     "avgTileKmPerContact": "KM PR. KONTAKT",
     "avgTileHoursPerCatch": "TIMER PR. FANGST",
-    "avgTileMinPerContact": "MIN PR. KONTAKT",
+    "avgTileHoursPerContact": "TIMER PR. KONTAKT",
     "timeOfDay": {
       "morning": "Morgen",
       "earlyMorning": "Tidlig morgen",
@@ -342,8 +346,8 @@
     "exact": "Præcis position",
     "yourData": "Dine data",
     "yourDataBody": "Dine fiskepladser er dine. STRIKE deler aldrig præcise positioner uden din tilladelse.",
-    "biteMap": "Bite Map",
-    "biteMapInfo": "Dine fangster deles anonymt og samlet til Bite Map. Præcise positioner deles aldrig.",
+    "biteMap": "Aktivitet",
+    "biteMapInfo": "Dine fangster deles anonymt og samlet til Aktivitetskortet. Præcise positioner deles aldrig.",
     "language": "Sprog / Language",
     "danish": "Dansk",
     "english": "English",
@@ -365,13 +369,13 @@
     "slide2Title": "Registrér på sekunder",
     "slide2Desc": "Tryk Kontakt, Følger eller Ny fangst mens du fisker. Hvert event fastgøres til din position og tid – logbogen skriver sig selv.",
     "slide3Title": "Dine spots forbliver private",
-    "slide3Desc": "Bite Map viser anonym aktivitet fra fællesskabet på zoneniveau. Dine præcise GPS-positioner deles aldrig med nogen.",
+    "slide3Desc": "Aktivitetskortet viser anonym aktivitet fra fællesskabet på zoneniveau. Dine præcise GPS-positioner deles aldrig med nogen.",
     "slide4Title": "Du er klar",
     "slide4Desc": "Tag ud, tryk Start fiskertur, og begynd. Din første tur tager under 30 sekunder at starte."
   },
   "spots": {
     "sectionTitle": "MINE SPOTS",
-    "saveHere": "Gem spot her",
+    "saveHere": "Gem kortcentrum som spot",
     "namePlaceholder": "Spotnavn...",
     "notePlaceholder": "Valgfri note...",
     "save": "Gem spot",
@@ -429,7 +433,7 @@
   },
   "bitemap": {
     "kicker": "FÆLLESSKABETS DATA",
-    "title": "BITE MAP",
+    "title": "AKTIVITETSKORT",
     "sub24": "Aktivitet de seneste 24 timer",
     "sub48": "Aktivitet de seneste 48 timer",
     "sub7": "Aktivitet de seneste 7 dage",

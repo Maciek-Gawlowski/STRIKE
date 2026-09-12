@@ -565,17 +565,9 @@ export default function StatsScreen() {
     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.textMuted} />
   );
 
-  const header = (
-    <Pressable style={styles.back} onPress={() => router.back()}>
-      <Ionicons name="chevron-back" size={22} color={Colors.text} />
-      <Text style={styles.backText}>{t("common.home")}</Text>
-    </Pressable>
-  );
-
   if (loading) {
     return (
       <Screen refreshControl={refreshControl}>
-        {header}
         <View style={styles.titleBlock}>
           <Text style={styles.kicker}>{t("stats.kicker")}</Text>
           <Text style={styles.title}>{t("stats.title")}</Text>
@@ -588,7 +580,6 @@ export default function StatsScreen() {
   if (!stats) {
     return (
       <Screen refreshControl={refreshControl}>
-        {header}
         <View style={styles.titleBlock}>
           <Text style={styles.kicker}>{t("stats.kicker")}</Text>
           <Text style={styles.title}>{t("stats.title")}</Text>
@@ -616,8 +607,6 @@ export default function StatsScreen() {
 
   return (
     <Screen refreshControl={refreshControl}>
-      {header}
-
       <View style={styles.titleBlock}>
         <Text style={styles.kicker}>{t("stats.kicker")}</Text>
         <Text style={styles.title}>{t("stats.title")}</Text>
@@ -650,9 +639,9 @@ export default function StatsScreen() {
         />
         <AvgTile
           value={stats.avgTimeBetweenContacts != null
-            ? String(Math.round(stats.avgTimeBetweenContacts))
+            ? (stats.avgTimeBetweenContacts / 60).toFixed(1)
             : "–"}
-          label={t("stats.avgTileMinPerContact")}
+          label={t("stats.avgTileHoursPerContact")}
         />
       </View>
       <Text style={styles.totalsMuted}>

@@ -13,12 +13,13 @@
     },
     "ios": {
       "bundleIdentifier": "com.strikeangler.app",
-      "buildNumber": "22",
+      "buildNumber": "24",
       "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "STRIKE uses your position to draw the fishing route and tag contacts, lost fish, and catches.",
         "NSCameraUsageDescription": "STRIKE uses your camera to take catch and profile photos.",
         "NSPhotoLibraryUsageDescription": "STRIKE lets you attach catch photos to your trip log.",
+        "NSPhotoLibraryAddUsageDescription": "STRIKE saves your catch photos to your photo library when you share a trip card.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

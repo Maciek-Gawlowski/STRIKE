@@ -2,9 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Animated, AppState, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ActionButton } from "@/components/ActionButton";
 import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { GlassCard } from "@/components/GlassCard";
@@ -87,10 +88,14 @@ function LiveBadge() {
   );
 }
 
+const TRIP_WARN_MS     = 6  * 60 * 60 * 1000; // 6 h — prompt user
+const TRIP_AUTO_STOP_MS = 12 * 60 * 60 * 1000; // 12 h — auto-stop
+
 export default function HomeScreen() {
   const { t } = useTranslation();
   const activeTrip = useStrikeStore((state) => state.activeTrip);
   const currentLocation = useStrikeStore((state) => state.currentLocation);
+  const locationSource = useStrikeStore((state) => state.locationSource);
   const trips = useStrikeStore((state) => state.trips);
   const weather = useStrikeStore((state) => state.weather);
   const startTrip = useStrikeStore((state) => state.startTrip);
@@ -103,6 +108,7 @@ export default function HomeScreen() {
   const discardRecoveredTrip = useStrikeStore((state) => state.discardRecoveredTrip);
 
   const celebAnim = useRef(new Animated.Value(0)).current;
+  const tripWarnedRef = useRef(false);
 
   const [now, setNow] = useState(Date.now());
   const [tripNameOpen, setTripNameOpen] = useState(false);
@@ -195,14 +201,30 @@ export default function HomeScreen() {
 
   const handleStartPress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setTripTitle(suggestTripName(currentLocation, trips) ?? "");
+
+    const suggested = suggestTripName(currentLocation, trips);
+    let defaultTitle = suggested ?? "";
+
+    if (!suggested && currentLocation && locationSource === "gps") {
+      try {
+        const [geo] = await Location.reverseGeocodeAsync(currentLocation);
+        const place = geo?.city ?? geo?.subregion ?? geo?.street ?? "";
+        if (place) {
+          const d = new Date();
+          const dateStr = d.toLocaleDateString([], { day: "numeric", month: "short" });
+          defaultTitle = `${place} · ${dateStr}`;
+        }
+      } catch { /* fall through to empty, user can type a name */ }
+    }
+
+    setTripTitle(defaultTitle);
     getDb().then(getLures).then((list) => {
       setModalLures(list);
       const fav = list.find((l) => l.isFavourite);
       setSelectedLureId(fav?.id ?? null);
     }).catch(() => null);
     setTripNameOpen(true);
-  }, [currentLocation, trips]);
+  }, [currentLocation, locationSource, trips]);
 
   const beginTrip = useCallback((title?: string) => {
     setTripNameOpen(false);
@@ -254,6 +276,41 @@ export default function HomeScreen() {
       addEvent("photo", { photoUri: uri });
     }
   }, [addEvent, t]);
+
+  // Reset warn flag whenever a new trip starts.
+  useEffect(() => { tripWarnedRef.current = false; }, [activeTrip?.id]);
+
+  const checkTripAge = useCallback(() => {
+    if (!activeTrip) return;
+    const elapsed = Date.now() - new Date(activeTrip.startedAt).getTime();
+    if (elapsed >= TRIP_AUTO_STOP_MS) {
+      stopTrip();
+      router.replace("/summary");
+    } else if (elapsed >= TRIP_WARN_MS && !tripWarnedRef.current) {
+      tripWarnedRef.current = true;
+      Alert.alert(
+        t("trip.longRunningTitle"),
+        t("trip.longRunningBody"),
+        [
+          { text: t("trip.longRunningContinue"), style: "cancel" },
+          {
+            text: t("trip.longRunningStop"),
+            style: "destructive",
+            onPress: () => { stopTrip(); router.replace("/summary"); },
+          },
+        ]
+      );
+    }
+  }, [activeTrip, stopTrip, t]);
+
+  // Check on mount and every time the app comes to the foreground.
+  useEffect(() => {
+    checkTripAge();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") checkTripAge();
+    });
+    return () => sub.remove();
+  }, [checkTripAge]);
 
   const handleStop = useCallback(() => {
     if (!activeTrip) return;
@@ -394,13 +451,13 @@ export default function HomeScreen() {
           <GlassCard style={styles.counterCard}>
             <View style={styles.counterInner}>
               <View style={styles.counterItem}>
-                <AnimatedCounter value={tripContacts} style={styles.counterValue} />
-                <Text style={styles.counterLabel}>{t("home.counter.contacts")}</Text>
+                <AnimatedCounter value={tripFollowing} style={styles.counterValue} />
+                <Text style={styles.counterLabel}>{t("home.counter.following")}</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counterItem}>
-                <AnimatedCounter value={tripFollowing} style={styles.counterValue} />
-                <Text style={styles.counterLabel}>{t("home.counter.following")}</Text>
+                <AnimatedCounter value={tripContacts} style={styles.counterValue} />
+                <Text style={styles.counterLabel}>{t("home.counter.contacts")}</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counterItem}>

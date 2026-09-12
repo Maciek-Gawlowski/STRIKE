@@ -13,9 +13,9 @@
   "tabs": {
     "home": "Home",
     "trips": "Trips",
-    "biteMap": "Bite Map",
+    "biteMap": "Map",
     "stats": "Stats",
-    "profile": "Profile"
+    "profile": "Me"
   },
   "actions": {
     "startTrip": "Start Fishing Trip",
@@ -83,7 +83,7 @@
     "welcomeTitle": "Ready for your first trip?",
     "welcomeText": "Start a session, tag fish activity, and add a catch photo. STRIKE builds your logbook automatically.",
     "welcomeHint": "Tap the button above to begin.",
-    "biteMapTitle": "BITE MAP",
+    "biteMapTitle": "ACTIVITY MAP",
     "biteMapSub": "See activity in your area",
     "openRouteMap": "Open live route map",
     "modalKicker": "NEW TRIP",
@@ -108,7 +108,7 @@
     "counter": {
       "contacts": "CONTACTS",
       "following": "FOLLOWING",
-      "catches": "LANDED"
+      "catches": "CATCHES"
     }
   },
   "trip": {
@@ -116,11 +116,11 @@
     "noActiveTrip": "No active trip",
     "noActiveTripHint": "Start a fishing trip from Home to draw the route.",
     "deleteConfirmTitle": "Delete trip",
-    "deleteTripConfirm": "This will permanently remove the trip and all its events from the Bite Map. This cannot be undone.",
+    "deleteTripConfirm": "This will permanently remove the trip and all its events from the Activity Map. This cannot be undone.",
     "deleteBtn": "Delete",
     "saveName": "Save",
     "removeEventConfirmTitle": "Remove event",
-    "removeEventConfirm": "This will remove the event from this trip and delete its Bite Map contribution.",
+    "removeEventConfirm": "This will remove the event from this trip and delete its Activity Map contribution.",
     "removeEventBtn": "Remove",
     "stopConfirmTitle": "Stop trip?",
     "stopConfirmBody": "Your route and catches are saved.",
@@ -128,6 +128,10 @@
     "lastTimeHere": "Last time here: {{catches}} catches · {{contacts}} contacts",
     "gpsWaiting": "Waiting for GPS…",
     "gpsWaitingHint": "GPS signal pending — your trip is already recording.",
+    "longRunningTitle": "Still fishing?",
+    "longRunningBody": "Your trip has been running for over 6 hours. Continue or stop and save it to your logbook.",
+    "longRunningContinue": "Still fishing",
+    "longRunningStop": "Stop trip",
     "timeline": "Timeline",
     "replay": "Replay route",
     "reviewKicker": "TRIP REVIEW"
@@ -259,7 +263,7 @@
     "avgTileCatchesPerTrip": "CATCHES / TRIP",
     "avgTileKmPerContact": "KM / CONTACT",
     "avgTileHoursPerCatch": "HOURS / CATCH",
-    "avgTileMinPerContact": "MIN / CONTACT",
+    "avgTileHoursPerContact": "HOURS / CONTACT",
     "timeOfDay": {
       "morning": "Morning",
       "earlyMorning": "Early morning",
@@ -342,8 +346,8 @@
     "exact": "Exact spot",
     "yourData": "Your data",
     "yourDataBody": "Your fishing spots are yours. STRIKE never shares exact locations without your permission.",
-    "biteMap": "Bite Map",
-    "biteMapInfo": "Your catches are shared anonymously and aggregated to the Bite Map. Exact positions are never shared.",
+    "biteMap": "Activity",
+    "biteMapInfo": "Your catches are shared anonymously and aggregated to the Activity Map. Exact positions are never shared.",
     "language": "Sprog / Language",
     "danish": "Dansk",
     "english": "English",
@@ -365,13 +369,13 @@
     "slide2Title": "Log activity in seconds",
     "slide2Desc": "Tap Contact, Following or New Catch while you fish. Each event is pinned to your exact location and time — the logbook writes itself.",
     "slide3Title": "Your spots stay private",
-    "slide3Desc": "The Bite Map shows anonymous activity from the community at zone level. Your exact GPS positions are never shared with anyone.",
+    "slide3Desc": "The Activity Map shows anonymous activity from the community at zone level. Your exact GPS positions are never shared with anyone.",
     "slide4Title": "You're ready",
     "slide4Desc": "Head out, tap Start Fishing Trip, and begin. Your first trip takes under 30 seconds to start."
   },
   "spots": {
     "sectionTitle": "MY SPOTS",
-    "saveHere": "Save spot here",
+    "saveHere": "Save map centre as spot",
     "namePlaceholder": "Spot name...",
     "notePlaceholder": "Optional note...",
     "save": "Save spot",
@@ -429,7 +433,7 @@
   },
   "bitemap": {
     "kicker": "COMMUNITY DATA",
-    "title": "BITE MAP",
+    "title": "ACTIVITY MAP",
     "sub24": "Activity in the last 24 hours",
     "sub48": "Activity in the last 48 hours",
     "sub7": "Activity in the last 7 days",

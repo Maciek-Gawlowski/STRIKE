@@ -280,11 +280,6 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
-      <Pressable style={styles.back} onPress={() => router.back()}>
-        <Ionicons name="chevron-back" size={22} color={Colors.text} />
-        <Text style={styles.backText}>{t("common.home")}</Text>
-      </Pressable>
-
       <View style={styles.titleBlock}>
         <Text style={styles.kicker}>{t("profile.kicker")}</Text>
         <Text style={styles.title}>{t("profile.title")}</Text>

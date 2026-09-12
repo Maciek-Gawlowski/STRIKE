@@ -42,6 +42,8 @@ const mapStyle = [
 
 const INITIAL_LAT_DELTA = 0.4;
 const MAX_LAT_DELTA_FOR_OVERLAY = 4;
+const MIN_CELL_OBSERVATIONS = 3;
+const MIN_HOTSPOT_OBSERVATIONS = MIN_CELL_OBSERVATIONS + 1;
 
 type TimeMode = "24h" | "48h" | "7d" | "custom";
 type TimeTab = { val: TimeMode; labelKey: string };
@@ -223,6 +225,7 @@ export default function BiteMapScreen() {
   }, [timeMode, customSince, customUntil, speciesFilter, eventTypeFilter, load]);
 
   const totalActivity = hexes.reduce((sum, h) => sum + h.total, 0);
+  const visibleActivity = hexes.filter((h) => h.total >= MIN_CELL_OBSERVATIONS).length;
   const selectedHex = hexes.find((h) => h.h3_cell === selectedCell) ?? null;
 
   const hexPositions = useMemo(() => {
@@ -246,9 +249,9 @@ export default function BiteMapScreen() {
       .map((pos) => {
         const total = hexes.find((h) => h.h3_cell === pos.cell)?.total ?? 0;
         const value = Math.min(total / 9, 1);
-        return { ...pos, value };
+        return { ...pos, total, value };
       })
-      .filter(() => true)
+      .filter((p) => p.total >= MIN_CELL_OBSERVATIONS)
       .map((point, idx) => {
         const radius = lerp(35, 90, point.value) * sizeScale * zoomScale;
         return { id: idx, x: point.x, y: point.y, rx: radius, ry: radius, value: point.value };
@@ -257,7 +260,7 @@ export default function BiteMapScreen() {
 
   // Top 8 hex cells by activity — rendered as numbered markers
   const hotspots = useMemo(
-    () => [...hexes].sort((a, b) => b.total - a.total).filter((h) => h.total >= 4).slice(0, 8),
+    () => [...hexes].sort((a, b) => b.total - a.total).filter((h) => h.total >= MIN_HOTSPOT_OBSERVATIONS).slice(0, 8),
     [hexes]
   );
 
@@ -331,13 +334,6 @@ export default function BiteMapScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.textMuted} />
       }
     >
-      <View style={styles.nav}>
-        <Pressable style={styles.back} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color={Colors.text} />
-          <Text style={styles.backText}>{t("common.home")}</Text>
-        </Pressable>
-      </View>
-
       <View style={styles.titleBlock}>
         <Text style={styles.kicker}>{t("bitemap.kicker")}</Text>
         <Text style={styles.title}>{t("bitemap.title")}</Text>
@@ -432,6 +428,11 @@ export default function BiteMapScreen() {
         {/* Heatmap overlay — touch passes through */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <HeatmapOverlay width={mapSize.width} height={mapSize.height} points={heatPoints} />
+        </View>
+        {/* Crosshair — marks the map centre used by "Save map centre as spot" */}
+        <View style={styles.crosshair} pointerEvents="none">
+          <View style={styles.crosshairH} />
+          <View style={styles.crosshairV} />
         </View>
       </View>
 
@@ -543,7 +544,7 @@ export default function BiteMapScreen() {
         <Text style={styles.hint}>{t("bitemap.tapHint")}</Text>
       )}
 
-      {!loading && totalActivity === 0 ? (
+      {!loading && (totalActivity === 0 || visibleActivity === 0) ? (
         <GlassCard style={styles.emptyCard}>
           <Ionicons name="fish-outline" size={28} color={Colors.textMuted} />
           <Text style={styles.emptyText}>{t("bitemap.empty")}</Text>
@@ -858,6 +859,31 @@ const styles = StyleSheet.create({
   spotPin: {
     alignItems: "center",
     justifyContent: "center"
+  },
+  crosshair: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: 0,
+    height: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  crosshairH: {
+    position: "absolute",
+    width: 20,
+    height: 1.5,
+    backgroundColor: Colors.amber,
+    opacity: 0.85,
+    marginLeft: -10,
+  },
+  crosshairV: {
+    position: "absolute",
+    width: 1.5,
+    height: 20,
+    backgroundColor: Colors.amber,
+    opacity: 0.85,
+    marginTop: -10,
   },
   saveSpotRow: {
     flexDirection: "row",

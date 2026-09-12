@@ -26,13 +26,6 @@ export default function LogbookScreen() {
 
   return (
     <Screen>
-      <View style={styles.nav}>
-        <Pressable style={styles.back} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color={Colors.text} />
-          <Text style={styles.backText}>{t("common.back")}</Text>
-        </Pressable>
-      </View>
-
       <View>
         <Text style={styles.kicker}>{t("logbook.kicker")}</Text>
         <Text style={styles.title}>{t("logbook.title")}</Text>
@@ -82,10 +75,22 @@ export default function LogbookScreen() {
                       <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                     </View>
                     <View style={styles.stats}>
-                      <Text style={styles.stat}>{formatDuration(trip.startedAt, trip.endedAt)}</Text>
-                      <Text style={styles.stat}>{formatDistance(trip.distanceMeters)}</Text>
-                      <Text style={styles.stat}>{t("logbook.catchesCount", { count: catches })}</Text>
-                      <Text style={styles.stat}>{t("logbook.contactsCount", { count: contacts })}</Text>
+                      <View style={styles.stat}>
+                        <Ionicons name="time-outline" size={13} color={Colors.text} />
+                        <Text style={styles.statText}>{formatDuration(trip.startedAt, trip.endedAt)}</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Ionicons name="footsteps-outline" size={13} color={Colors.text} />
+                        <Text style={styles.statText}>{formatDistance(trip.distanceMeters)}</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Ionicons name="fish-outline" size={13} color={Colors.text} />
+                        <Text style={styles.statText}>{t("logbook.catchesCount", { count: catches })}</Text>
+                      </View>
+                      <View style={styles.stat}>
+                        <Ionicons name="flash-outline" size={13} color={Colors.text} />
+                        <Text style={styles.statText}>{t("logbook.contactsCount", { count: contacts })}</Text>
+                      </View>
                     </View>
                   </Pressable>
                 );
@@ -225,14 +230,19 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   stat: {
-    color: Colors.text,
-    fontSize: 12,
-    fontFamily: Fonts.bodySemibold,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
     overflow: "hidden",
     backgroundColor: Colors.pill,
-    letterSpacing: 0
+  },
+  statText: {
+    color: Colors.text,
+    fontSize: 12,
+    fontFamily: Fonts.bodySemibold,
+    letterSpacing: 0,
   }
 });
