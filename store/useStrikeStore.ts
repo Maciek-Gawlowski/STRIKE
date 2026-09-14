@@ -66,6 +66,14 @@ type StrikeState = {
   currentLocation: Coordinate | null;
   lastCompletedTripId: string | null;
   locationSource: "gps" | "mock";
+  /**
+   * True only after a real GPS fix has been received in this app session.
+   * `locationSource` is not enough: startTrip() sets it to "gps" optimistically
+   * before any fix exists, so it can claim "gps" while currentLocation is still
+   * the demo start point. Anything that leaves the device (Activity Map upload,
+   * reverse geocoding) must gate on this flag instead.
+   */
+  hasGpsFix: boolean;
   weather: WeatherData | null;
   waterLevel: WaterLevelData | null;
   mapType: MapType;
@@ -229,10 +237,12 @@ function cancelRouteFlush() {
 
 export const useStrikeStore = create<StrikeState>((set, get) => ({
   activeTrip: null,
-  trips: demoTrips,
+  // Demo trips are a development aid only — a fresh install must start empty.
+  trips: __DEV__ ? demoTrips : [],
   currentLocation: demoStart,
   lastCompletedTripId: null,
   locationSource: "mock",
+  hasGpsFix: false,
   weather: null,
   waterLevel: null,
   mapType: "standard",
@@ -310,14 +320,22 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     return completed;
   },
   setCurrentLocation: (position, source = "gps") => {
-    set({ currentLocation: position, locationSource: source });
+    set({
+      currentLocation: position,
+      locationSource: source,
+      ...(source === "gps" ? { hasGpsFix: true } : null)
+    });
     persistAppState();
   },
   appendRoutePoint: (position, source = "gps") => {
     const state = get();
     const trip = state.activeTrip;
     if (!trip) {
-      set({ currentLocation: position, locationSource: source });
+      set({
+        currentLocation: position,
+        locationSource: source,
+        ...(source === "gps" ? { hasGpsFix: true } : null)
+      });
       persistAppState();
       return;
     }
@@ -336,7 +354,8 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     set({
       currentLocation: position,
       locationSource: source,
-      activeTrip: updatedTrip
+      activeTrip: updatedTrip,
+      ...(source === "gps" ? { hasGpsFix: true } : null)
     });
     // Debounced flush: write the route to SQLite at most once every ROUTE_FLUSH_MS.
     // Individual events (contacts/catches) still write immediately via upsertEvent.
@@ -377,9 +396,13 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       storeWeatherForEvent(event.id, state.weather);
     }
 
-    // Bite Map: upload area-level activity — h3Cell only, never exact GPS.
+    // Activity Map: upload area-level activity — h3Cell only, never exact GPS.
     // Photo events are not activity signals; skip upload.
-    if (type !== "photo") {
+    // Events without a real GPS fix (permission denied, or logged before the
+    // first fix lands) sit on the demo start point or a synthesised fallback.
+    // Uploading those would put permanent phantom activity on the community map
+    // roughly 100 km from Als, so they stay local-only.
+    if (type !== "photo" && state.hasGpsFix) {
       void uploadBiteMapEvent(event, h3Cell, state.weather);
     }
 
@@ -486,7 +509,9 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
           ...opts.weatherPatch,
         });
       }
-      if (opts?.resyncBiteMap && updatedEvent.type !== "lure") {
+      // "lure" and "photo" events are never activity signals and are never
+      // uploaded by addEvent — resync must not smuggle them onto the map either.
+      if (opts?.resyncBiteMap && updatedEvent.type !== "lure" && updatedEvent.type !== "photo") {
         const h3Cell = latLngToCell(updatedEvent.position.latitude, updatedEvent.position.longitude);
         const combinedWeather: WeatherSnapshot | null = opts.existingWeather
           ? { ...opts.existingWeather, ...opts.weatherPatch }
@@ -561,7 +586,10 @@ export async function hydrateStore(): Promise<void> {
     void flushBiteMapDeleteQueue(db);
     void flushFeedbackQueue(db);
 
-    if (!(await hasSeeded())) {
+    // Seed demo trips in development only. A tester's first launch must show an
+    // empty logbook and empty statistics — seeded trips off Stevns would look
+    // like the app invented someone else's fishing and would skew their stats.
+    if (__DEV__ && !(await hasSeeded())) {
       for (const trip of demoTrips) {
         await saveTripWithEvents(db, trip);
       }

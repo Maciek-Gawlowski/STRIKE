@@ -84,13 +84,26 @@ function buildUrl(base: string, params: Record<string, string>): string {
   return `${base}?${query}`;
 }
 
+/**
+ * Coordinates sent to Open-Meteo are truncated before they leave the device.
+ * STRIKE's promise is that a user's exact spot is never handed to anyone, and
+ * that has to hold for third-party APIs too — not just for our own backend.
+ *
+ * 3 decimals ≈ 110 m, far finer than Open-Meteo's own grid (~1–11 km), so the
+ * returned conditions are identical while the request no longer pinpoints where
+ * someone is standing. Not rounded any coarser, because the marine grid needs
+ * the point to stay on the water side of the shoreline.
+ */
+const COORD_PRECISION = 3;
+const coarse = (value: number): string => value.toFixed(COORD_PRECISION);
+
 /** Sea-surface temperature is optional; failures/inland nulls resolve to null. */
 async function fetchWaterTemp(lat: number, lng: number): Promise<number | null> {
   try {
     const data = await fetchJson<MarineResponse>(
       buildUrl(MARINE_URL, {
-        latitude: String(lat),
-        longitude: String(lng),
+        latitude: coarse(lat),
+        longitude: coarse(lng),
         current: "sea_surface_temperature"
       })
     );
@@ -111,8 +124,8 @@ export async function fetchWeather(lat: number, lng: number): Promise<WeatherDat
     const [forecast, waterTemp] = await Promise.all([
       fetchJson<ForecastResponse>(
         buildUrl(FORECAST_URL, {
-          latitude: String(lat),
-          longitude: String(lng),
+          latitude: coarse(lat),
+          longitude: coarse(lng),
           current: "temperature_2m,wind_speed_10m,wind_direction_10m,surface_pressure",
           wind_speed_unit: "ms"
         })

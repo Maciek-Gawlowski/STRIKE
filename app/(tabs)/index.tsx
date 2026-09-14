@@ -95,7 +95,7 @@ export default function HomeScreen() {
   const { t } = useTranslation();
   const activeTrip = useStrikeStore((state) => state.activeTrip);
   const currentLocation = useStrikeStore((state) => state.currentLocation);
-  const locationSource = useStrikeStore((state) => state.locationSource);
+  const hasGpsFix = useStrikeStore((state) => state.hasGpsFix);
   const trips = useStrikeStore((state) => state.trips);
   const weather = useStrikeStore((state) => state.weather);
   const startTrip = useStrikeStore((state) => state.startTrip);
@@ -205,7 +205,9 @@ export default function HomeScreen() {
     const suggested = suggestTripName(currentLocation, trips);
     let defaultTitle = suggested ?? "";
 
-    if (!suggested && currentLocation && locationSource === "gps") {
+    // Only reverse-geocode a position that came from a real GPS fix — otherwise
+    // the trip gets auto-named after the demo start point, ~100 km from Als.
+    if (!suggested && currentLocation && hasGpsFix) {
       try {
         const [geo] = await Location.reverseGeocodeAsync(currentLocation);
         const place = geo?.city ?? geo?.subregion ?? geo?.street ?? "";
@@ -224,12 +226,14 @@ export default function HomeScreen() {
       setSelectedLureId(fav?.id ?? null);
     }).catch(() => null);
     setTripNameOpen(true);
-  }, [currentLocation, locationSource, trips]);
+  }, [currentLocation, hasGpsFix, trips]);
 
   const beginTrip = useCallback((title?: string) => {
     setTripNameOpen(false);
     setTripTitle("");
-    startTrip(undefined, "gps", title?.trim() || autoTripName(t), selectedLureId ?? undefined);
+    // Don't claim a GPS source before a fix exists — TripWatcher flips the
+    // source to "gps" as soon as a real position arrives.
+    startTrip(undefined, undefined, title?.trim() || autoTripName(t), selectedLureId ?? undefined);
     router.push("/map");
   }, [startTrip, selectedLureId, t]);
 

@@ -310,7 +310,7 @@ function TimeOfDayRing({ hourCounts, t }: { hourCounts: number[]; t: (k: string)
 }
 
 // ── Monthly stacked bar chart ─────────────────────────────────────────────────
-type MonthBucket = { key: string; label: string; catches: number; contacts: number; following: number; lost: number };
+type MonthBucket = { key: string; label: string; catches: number; contacts: number; following: number };
 type SpeciesBucket = { species: string; count: number };
 
 const N_MONTHS = 6;
@@ -319,20 +319,22 @@ const MBAR_BOTTOM = 20, MBAR_TOP = 8, MBAR_GAP = 7;
 const MBAR_USABLE = MBAR_H - MBAR_BOTTOM - MBAR_TOP;
 const MBAR_BAR = (MBAR_W - (N_MONTHS - 1) * MBAR_GAP) / N_MONTHS;
 
+// "Lost" was removed on Claus's call (Sept 2026): a contact already IS a fish
+// that wasn't landed, so counting it again as "lost" double-counted the same
+// fish in the stacked bar — the bar showed 20 events for 13 registrations.
 const SEG_COLORS = {
   catches:  "#3DDBA0",
   contacts: "#FF6A00",
   following: "#3A86B0",
-  lost:     "#4a5e6e",
 } as const;
 
 function StackedMonthlyChart({ data }: { data: MonthBucket[] }) {
-  const maxTotal = Math.max(...data.map((d) => d.catches + d.contacts + d.following + d.lost), 1);
+  const maxTotal = Math.max(...data.map((d) => d.catches + d.contacts + d.following), 1);
 
   return (
     <Svg width={MBAR_W} height={MBAR_H} viewBox={`0 0 ${MBAR_W} ${MBAR_H}`}>
       {data.map((bucket, i) => {
-        const total = bucket.catches + bucket.contacts + bucket.following + bucket.lost;
+        const total = bucket.catches + bucket.contacts + bucket.following;
         const x = i * (MBAR_BAR + MBAR_GAP);
         const totalH = total > 0 ? Math.max((total / maxTotal) * MBAR_USABLE, 4) : 0;
 
@@ -340,9 +342,9 @@ function StackedMonthlyChart({ data }: { data: MonthBucket[] }) {
         const bgY = MBAR_TOP;
         const bgH = MBAR_USABLE;
 
-        // Segment heights (bottom-up: lost, following, contacts, catches)
+        // Segment heights (bottom-up: following, contacts, catches)
         const segments: { key: keyof typeof SEG_COLORS; h: number }[] = [];
-        const keys: (keyof typeof SEG_COLORS)[] = ["lost", "following", "contacts", "catches"];
+        const keys: (keyof typeof SEG_COLORS)[] = ["following", "contacts", "catches"];
         for (const key of keys) {
           const count = bucket[key];
           if (count > 0 && total > 0) {
@@ -405,7 +407,6 @@ function StackedChartLegend({ t }: { t: (k: string) => string }) {
     { color: SEG_COLORS.catches,  label: t("metrics.catches") },
     { color: SEG_COLORS.contacts, label: t("metrics.contacts") },
     { color: SEG_COLORS.following, label: t("stats.following") },
-    { color: SEG_COLORS.lost,     label: t("stats.lost") },
   ];
   return (
     <View style={styles.stackLegend}>
@@ -521,8 +522,7 @@ export default function StatsScreen() {
       const catches   = allEvents.filter((e) => e.type === "catch"     && e.timestamp.startsWith(key)).length;
       const contacts  = allEvents.filter((e) => e.type === "contact"   && e.timestamp.startsWith(key)).length;
       const following = allEvents.filter((e) => e.type === "following" && e.timestamp.startsWith(key)).length;
-      const lost = Math.max(contacts - catches, 0);
-      return { key, label, catches, contacts, following, lost };
+      return { key, label, catches, contacts, following };
     });
   }, [allEvents]);
 
@@ -599,7 +599,6 @@ export default function StatsScreen() {
 
   const hoursPerCatch = stats.totalCatches > 0 ? stats.totalHours / stats.totalCatches : null;
   const noDataLabel = t("stats.noData");
-  const totalLost = Math.max(stats.totalContacts - stats.totalCatches, 0);
 
   const hasWindData = stats.catchesByWindDirection.length > 0;
   const hasTempData = stats.catchesByWaterTemp.some((b) => b.count > 0);
@@ -612,12 +611,11 @@ export default function StatsScreen() {
         <Text style={styles.title}>{t("stats.title")}</Text>
       </View>
 
-      {/* a) Overview — 4 hero tiles */}
+      {/* a) Overview — 3 hero tiles (tiles are flex:1, so they widen to fill the row) */}
       <View style={styles.heroGrid}>
-        <StatTileHero icon="eye-outline"      value={stats.totalFollowing} label={t("stats.following")}        color={SEG_COLORS.following} />
-        <StatTileHero icon="flash-outline"    value={stats.totalContacts}  label={t("stats.tileHug")}          color={SEG_COLORS.contacts} />
-        <StatTileHero icon="fish-outline"     value={stats.totalCatches}   label={t("metrics.catches")}        color={SEG_COLORS.catches} />
-        <StatTileHero icon="close-circle-outline" value={totalLost}        label={t("stats.lost")}             color={SEG_COLORS.lost} />
+        <StatTileHero icon="eye-outline"   value={stats.totalFollowing} label={t("stats.following")} color={SEG_COLORS.following} />
+        <StatTileHero icon="flash-outline" value={stats.totalContacts}  label={t("stats.tileHug")}   color={SEG_COLORS.contacts} />
+        <StatTileHero icon="fish-outline"  value={stats.totalCatches}   label={t("metrics.catches")} color={SEG_COLORS.catches} />
       </View>
 
       {/* b) Averages — stat tiles */}
@@ -654,7 +652,7 @@ export default function StatsScreen() {
       {/* c) Monthly stacked chart */}
       <SectionHeader title={t("stats.monthlyChart")} />
       <GlassCard style={styles.panel}>
-        {monthlyData.some((b) => b.catches + b.contacts + b.following + b.lost > 0) ? (
+        {monthlyData.some((b) => b.catches + b.contacts + b.following > 0) ? (
           <View style={styles.stackedChartWrap}>
             <StackedMonthlyChart data={monthlyData} />
             <StackedChartLegend t={t} />
