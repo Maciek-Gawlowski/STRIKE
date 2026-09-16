@@ -508,10 +508,13 @@ export default function StatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const allEvents = useMemo(() => {
-    const all = activeTrip ? [activeTrip, ...trips] : trips;
-    return all.flatMap((trip) => trip.events);
-  }, [trips, activeTrip]);
+  // Completed trips only — the tiles above come from getStatistics(), which
+  // counts finished trips. Folding the trip that is running right now into the
+  // charts below made the same screen show two different totals for catches.
+  const allEvents = useMemo(
+    () => trips.flatMap((trip) => trip.events),
+    [trips]
+  );
 
   const monthlyData = useMemo((): MonthBucket[] => {
     const now = new Date();
@@ -528,17 +531,24 @@ export default function StatsScreen() {
 
   const speciesData = useMemo((): SpeciesBucket[] => {
     const counts: Record<string, number> = {};
-    allEvents
-      .filter((e) => e.type === "catch" && e.species?.trim())
-      .forEach((e) => {
-        const sp = e.species!.trim();
-        counts[sp] = (counts[sp] ?? 0) + 1;
-      });
-    return Object.entries(counts)
+    let unspecified = 0;
+    for (const e of allEvents) {
+      if (e.type !== "catch") continue;
+      const sp = e.species?.trim();
+      if (sp) counts[sp] = (counts[sp] ?? 0) + 1;
+      else unspecified += 1;
+    }
+    const named = Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([species, count]) => ({ species, count }));
-  }, [allEvents]);
+    // Catches logged without a species used to be dropped silently, so this
+    // list added up to less than the catch count on the same screen. They get
+    // their own row instead, always last.
+    return unspecified > 0
+      ? [...named, { species: t("stats.speciesUnspecified"), count: unspecified }]
+      : named;
+  }, [allEvents, t]);
 
   const load = useCallback(async () => {
     const [result, cond, lures] = await Promise.all([

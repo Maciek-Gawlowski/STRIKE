@@ -39,6 +39,22 @@ const WATER_TEMP_RANGES = ["<8°C", "8-12°C", "12-16°C", ">16°C"] as const;
 // averages so a single runaway session doesn't distort catches/trip, km/contact, etc.
 const MAX_TRIP_DURATION_S = 12 * 3600;
 
+/**
+ * The set of trips every statistic counts.
+ *
+ * This used to be applied in two queries out of fifteen, so the screen
+ * contradicted itself: the "catches" tile excluded abandoned 12-hour sessions
+ * while the time-of-day, species and wind breakdowns still counted their
+ * events. Three different totals for the same thing on one screen.
+ *
+ * COUNTED_TRIPS is for queries that join trips as `t`; COUNTED_TRIPS_BARE for
+ * the ones that select from `trips` directly. Every query uses one of them.
+ */
+const COUNTED_TRIPS =
+  `t.end_time IS NOT NULL AND (t.duration IS NULL OR t.duration <= ${MAX_TRIP_DURATION_S})`;
+const COUNTED_TRIPS_BARE =
+  `end_time IS NOT NULL AND (duration IS NULL OR duration <= ${MAX_TRIP_DURATION_S})`;
+
 function waterTempBucket(temp: number): string {
   if (temp < 8) {
     return WATER_TEMP_RANGES[0];
@@ -104,13 +120,13 @@ export async function getStreakData(): Promise<StreakData> {
   weekStart.setHours(0, 0, 0, 0);
 
   const weekRow = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) AS count FROM trips WHERE end_time IS NOT NULL AND start_time >= ?`,
+    `SELECT COUNT(*) AS count FROM trips WHERE ${COUNTED_TRIPS_BARE} AND start_time >= ?`,
     [weekStart.toISOString()]
   );
   const tripsThisWeek = weekRow?.count ?? 0;
 
   const dateRows = await db.getAllAsync<{ d: string }>(
-    `SELECT DISTINCT date(start_time, 'localtime') AS d FROM trips WHERE end_time IS NOT NULL ORDER BY d DESC`
+    `SELECT DISTINCT date(start_time, 'localtime') AS d FROM trips WHERE ${COUNTED_TRIPS_BARE} ORDER BY d DESC`
   );
   const dateSet = new Set(dateRows.map((r) => r.d));
 
@@ -133,7 +149,7 @@ export async function getStreakData(): Promise<StreakData> {
   const bestRow = await db.getFirstAsync<{ catches: number }>(
     `SELECT COUNT(*) AS catches
      FROM events e JOIN trips t ON t.id = e.trip_id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch'
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch'
      GROUP BY e.trip_id
      ORDER BY catches DESC LIMIT 1`
   );
@@ -157,7 +173,7 @@ export async function getBestConditions(): Promise<BestConditions> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      JOIN weather_snapshots w ON w.event_id = e.id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.water_temp IS NOT NULL`
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch' AND w.water_temp IS NOT NULL`
   );
 
   let waterTempRange: string | null = null;
@@ -180,7 +196,7 @@ export async function getBestConditions(): Promise<BestConditions> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      JOIN weather_snapshots w ON w.event_id = e.id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.wind_direction IS NOT NULL
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch' AND w.wind_direction IS NOT NULL
      GROUP BY w.wind_direction ORDER BY COUNT(*) DESC LIMIT 1`
   );
 
@@ -189,7 +205,7 @@ export async function getBestConditions(): Promise<BestConditions> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      JOIN weather_snapshots w ON w.event_id = e.id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.wind_speed IS NOT NULL`
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch' AND w.wind_speed IS NOT NULL`
   );
 
   const pressureRow = await db.getFirstAsync<{ avg: number }>(
@@ -197,7 +213,7 @@ export async function getBestConditions(): Promise<BestConditions> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      JOIN weather_snapshots w ON w.event_id = e.id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.pressure IS NOT NULL`
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch' AND w.pressure IS NOT NULL`
   );
 
   return {
@@ -224,7 +240,7 @@ export async function getLureStats(): Promise<LureStat[]> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      JOIN lures l ON l.id = e.lure_id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND e.lure_id IS NOT NULL
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch' AND e.lure_id IS NOT NULL
      GROUP BY e.lure_id
      ORDER BY catches DESC`
   );
@@ -243,8 +259,7 @@ export async function getStatistics(): Promise<Statistics | null> {
             COALESCE(SUM(distance), 0) AS distance,
             COALESCE(SUM(duration), 0) AS duration
      FROM trips
-     WHERE end_time IS NOT NULL
-       AND (duration IS NULL OR duration <= ${MAX_TRIP_DURATION_S});`
+     WHERE ${COUNTED_TRIPS_BARE};`
   );
 
   const totalTrips = tripTotals?.trips ?? 0;
@@ -262,8 +277,7 @@ export async function getStatistics(): Promise<Statistics | null> {
     `SELECT e.type AS type, COUNT(*) AS count
      FROM events e
      JOIN trips t ON t.id = e.trip_id
-     WHERE t.end_time IS NOT NULL
-       AND (t.duration IS NULL OR t.duration <= ${MAX_TRIP_DURATION_S})
+     WHERE ${COUNTED_TRIPS}
      GROUP BY e.type;`
   );
   const countByType: Record<string, number> = {};
@@ -279,7 +293,7 @@ export async function getStatistics(): Promise<Statistics | null> {
     `SELECT e.timestamp AS timestamp
      FROM events e
      JOIN trips t ON t.id = e.trip_id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch';`
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch';`
   );
   const catchHours = catchTimes.map((row) => new Date(row.timestamp).getHours());
   const bestTimeOfDay = bestTimeWindow(catchHours);
@@ -292,7 +306,7 @@ export async function getStatistics(): Promise<Statistics | null> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      JOIN weather_snapshots w ON w.event_id = e.id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.wind_direction IS NOT NULL
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch' AND w.wind_direction IS NOT NULL
      GROUP BY w.wind_direction
      ORDER BY count DESC;`
   );
@@ -303,7 +317,7 @@ export async function getStatistics(): Promise<Statistics | null> {
      FROM events e
      JOIN trips t ON t.id = e.trip_id
      JOIN weather_snapshots w ON w.event_id = e.id
-     WHERE t.end_time IS NOT NULL AND e.type = 'catch' AND w.water_temp IS NOT NULL;`
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch' AND w.water_temp IS NOT NULL;`
   );
   const tempCounts = new Map<string, number>(WATER_TEMP_RANGES.map((range) => [range, 0]));
   for (const row of waterTempRows) {
@@ -323,7 +337,7 @@ export async function getStatistics(): Promise<Statistics | null> {
   }>(
     `SELECT start_time, distance, duration
      FROM trips
-     WHERE end_time IS NOT NULL
+     WHERE ${COUNTED_TRIPS_BARE}
      ORDER BY distance DESC
      LIMIT 1;`
   );
@@ -346,7 +360,7 @@ export async function getStatistics(): Promise<Statistics | null> {
             SUM(CASE WHEN e.type = 'contact' THEN 1 ELSE 0 END) AS contacts
      FROM trips t
      LEFT JOIN events e ON e.trip_id = t.id
-     WHERE t.end_time IS NOT NULL
+     WHERE ${COUNTED_TRIPS}
      GROUP BY t.id
      ORDER BY catches DESC, contacts DESC
      LIMIT 1;`

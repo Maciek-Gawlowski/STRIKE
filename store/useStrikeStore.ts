@@ -222,6 +222,22 @@ const fallbackPoint = (state: StrikeState) => {
 // Writing the full route_json on every GPS point is expensive. Instead we
 // schedule a flush every ROUTE_FLUSH_MS. On stopTrip we cancel the timer
 // because saveTripWithEvents already does a final authoritative write.
+/**
+ * Fastest movement we will count towards a trip's distance, in m/s.
+ *
+ * 8 m/s is ~29 km/h: comfortably above walking or wading, comfortably below a
+ * car or a GPS spike. Anything faster is a jump the receiver invented, and
+ * those were adding up — a six-hour session was reporting 848 km, which then
+ * fed "km per contact" and made that number meaningless too.
+ *
+ * The point itself is still added to the route, so the map keeps showing where
+ * the receiver said you were. Only the distance total ignores it.
+ */
+const MAX_PLAUSIBLE_SPEED_MS = 8;
+
+/** Wall-clock time of the last route point, for the speed check above. */
+let lastRoutePointAt: number | null = null;
+
 const ROUTE_FLUSH_MS = 10_000;
 const STALE_TRIP_MS = 12 * 60 * 60 * 1000;
 
@@ -291,6 +307,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       steps: 0,
       currentLureId: lureId
     };
+    lastRoutePointAt = null;
     set({
       activeTrip: trip,
       currentLocation: startPosition,
@@ -332,6 +349,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       lastCompletedTripId: completed.id
     }));
 
+    lastRoutePointAt = null;
     // Cancel any pending debounced flush — saveTripWithEvents is the final write.
     cancelRouteFlush();
     // Persist the finished trip with its end time, final route, and all events.
@@ -362,7 +380,13 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     }
 
     const previous = trip.route.at(-1);
-    const addedDistance = previous ? distanceBetween(previous, position) : 0;
+    const rawDistance = previous ? distanceBetween(previous, position) : 0;
+    const now = Date.now();
+    const elapsedS = lastRoutePointAt != null ? (now - lastRoutePointAt) / 1000 : null;
+    lastRoutePointAt = now;
+    const implausible =
+      elapsedS != null && elapsedS > 0 && rawDistance / elapsedS > MAX_PLAUSIBLE_SPEED_MS;
+    const addedDistance = implausible ? 0 : rawDistance;
     const nextDistance = trip.distanceMeters + addedDistance;
 
     const updatedTrip: Trip = {

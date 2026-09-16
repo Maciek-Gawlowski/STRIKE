@@ -259,6 +259,7 @@
     "bestTripValue": "{{catches}} catches / {{contacts}} contacts",
     "noData": "Not enough data yet",
     "tileHug": "Contacts",
+    "speciesUnspecified": "Not specified",
     "lost": "Lost",
     "condTemp": "Water temp",
     "condWind": "Wind",
