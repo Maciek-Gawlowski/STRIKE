@@ -116,7 +116,6 @@ export default function HomeScreen() {
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [modalLures, setModalLures] = useState<Lure[]>([]);
   const [streakData, setStreakData] = useState<StreakData | null>(null);
-  const [pendingCount, setPendingCount] = useState(0);
   const [lureChangeOpen, setLureChangeOpen] = useState(false);
   const [selectedLureId, setSelectedLureId] = useState<string | null>(null);
 
@@ -145,13 +144,6 @@ export default function HomeScreen() {
   useEffect(() => {
     getStreakData().then(setStreakData).catch(() => null);
   }, [trips.length]);
-
-  useEffect(() => {
-    getDb()
-      .then((db) => db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM events WHERE sync_status = 'pending'"))
-      .then((row) => setPendingCount(row?.count ?? 0))
-      .catch(() => null);
-  }, [trips.length, activeTrip?.events.length]);
 
   // The trip shown in OVERBLIK: active trip if running, otherwise last completed trip.
   const displayTrip = activeTrip ?? trips[0] ?? null;
@@ -495,14 +487,6 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      {/* Sync status */}
-      {pendingCount > 0 ? (
-        <View style={styles.syncChip}>
-          <Ionicons name="cloud-upload-outline" size={13} color={Colors.amber} />
-          <Text style={styles.syncChipText}>{t("home.pendingSync", { n: pendingCount })}</Text>
-        </View>
-      ) : null}
-
       {/* ── MILJØDATA ── */}
       <SectionHeader
         title={t("home.miljoedata")}
@@ -779,25 +763,6 @@ const styles = StyleSheet.create({
     maxWidth: 140,
   },
 
-  // Sync status chip
-  syncChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    backgroundColor: Colors.field,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  syncChipText: {
-    color: Colors.textMuted,
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
-    letterSpacing: 0,
-  },
 
   // Active trip: event row + stop
   eventRow: {

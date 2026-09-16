@@ -72,7 +72,6 @@
     "insightsLoading": "Henter aktivitet…",
     "communityActivity": "{{count}} registreringer i dit område seneste 24t",
     "beFirst": "Vær den første til at registrere aktivitet i dag.",
-    "pendingSync": "{{n}} afventer sync",
     "streak": "{{n}} denne uge",
     "streakDays": "{{n}} dages stribe",
     "bestConditions": "Dine bedste forhold: {{wind}}",
@@ -219,8 +218,8 @@
   "logbook": {
     "kicker": "LOKAL LOGBOG",
     "title": "Tidligere ture",
-    "catchesCount": "{{count}} fangster",
-    "contactsCount": "{{count}} kontakter",
+    "catchesCount": { "one": "1 fangst", "other": "{{count}} fangster" },
+    "contactsCount": { "one": "1 hug", "other": "{{count}} hug" },
     "emptyTitle": "Ingen ture endnu",
     "emptyBody": "Gennemfør din første fiskertur og den vil dukke op her med din rute, fangster og forhold."
   },

@@ -72,7 +72,6 @@
     "insightsLoading": "Loading activity…",
     "communityActivity": "{{count}} reports in your area in the last 24h",
     "beFirst": "Be the first to log activity today.",
-    "pendingSync": "{{n}} pending sync",
     "streak": "{{n}} this week",
     "streakDays": "{{n}} day streak",
     "bestConditions": "Your best conditions: {{wind}}",
@@ -219,8 +218,8 @@
   "logbook": {
     "kicker": "LOCAL LOGBOOK",
     "title": "Previous trips",
-    "catchesCount": "{{count}} catches",
-    "contactsCount": "{{count}} contacts",
+    "catchesCount": { "one": "1 catch", "other": "{{count}} catches" },
+    "contactsCount": { "one": "1 contact", "other": "{{count}} contacts" },
     "emptyTitle": "No trips yet",
     "emptyBody": "Complete your first fishing trip and it will appear here with your route, catches and conditions."
   },
