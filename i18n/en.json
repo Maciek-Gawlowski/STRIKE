@@ -91,6 +91,7 @@
     "modalPlaceholder": "Stevns Klint, North point...",
     "startingLure": "Starting lure",
     "cancelTripStart": "Cancel",
+    "tripNamePlace": "{{place}} · {{time}}",
     "tripMorning": "Morning session",
     "tripLateMorning": "Late morning session",
     "tripNoon": "Midday session",

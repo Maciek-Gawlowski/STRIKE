@@ -91,6 +91,7 @@
     "modalPlaceholder": "Stevns Klint, nordspids...",
     "startingLure": "Startende agn",
     "cancelTripStart": "Afbryd tur",
+    "tripNamePlace": "{{place}} · {{time}}",
     "tripMorning": "Morgentur",
     "tripLateMorning": "Formiddagstur",
     "tripNoon": "Middagstur",

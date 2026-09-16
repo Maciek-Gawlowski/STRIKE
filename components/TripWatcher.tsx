@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Alert, Linking } from "react-native";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
+import { timeOfDayKey } from "@/services/tripName";
 
 const WEATHER_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -85,6 +86,25 @@ export function TripWatcher() {
           "gps"
         );
 
+        // Name the trip after where it actually started. The user pressed Start
+        // before any fix existed, so the trip is carrying a time-of-day name
+        // like "Morgentur" — and three of those in a row make a logbook of
+        // identical rows. renameActiveTrip ignores this if the user typed a
+        // title of their own.
+        void Location.reverseGeocodeAsync({
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude
+        })
+          .then(([geo]) => {
+            if (!mounted) return;
+            const place = geo?.city ?? geo?.subregion ?? geo?.district ?? geo?.street ?? "";
+            if (!place) return;
+            useStrikeStore.getState().renameActiveTrip(
+              t("home.tripNamePlace", { place, time: t(timeOfDayKey()) })
+            );
+          })
+          .catch(() => undefined);
+
         subscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.Balanced,
@@ -116,7 +136,7 @@ export function TripWatcher() {
       }
       clearInterval(weatherTimer);
     };
-  }, [activeTripId, appendRoutePoint]);
+  }, [activeTripId, appendRoutePoint, t]);
 
   return null;
 }

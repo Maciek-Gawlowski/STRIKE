@@ -27,6 +27,7 @@ import { getDb } from "@/database/db";
 import { getOnboardingCompleted } from "@/database/preferences";
 import { getLures, type Lure } from "@/database/lures";
 import { formatWind } from "@/services/weather";
+import { timeOfDayKey } from "@/services/tripName";
 import { getStreakData, type StreakData } from "@/services/statistics";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
@@ -46,13 +47,7 @@ function metersBetween(a: Coordinate, b: Coordinate): number {
 }
 
 function autoTripName(t: (key: string) => string): string {
-  const hour = new Date().getHours();
-  if (hour >= 4  && hour < 9)  return t("home.tripMorning");
-  if (hour >= 9  && hour < 12) return t("home.tripLateMorning");
-  if (hour >= 12 && hour < 14) return t("home.tripNoon");
-  if (hour >= 14 && hour < 18) return t("home.tripAfternoon");
-  if (hour >= 18 && hour < 22) return t("home.tripEvening");
-  return t("home.tripNight");
+  return t(timeOfDayKey());
 }
 
 function suggestTripName(location: Coordinate | null, trips: Trip[]): string | null {
@@ -225,7 +220,11 @@ export default function HomeScreen() {
     setTripTitle("");
     // Don't claim a GPS source before a fix exists — TripWatcher flips the
     // source to "gps" as soon as a real position arrives.
-    startTrip(undefined, undefined, title?.trim() || autoTripName(t), selectedLureId ?? undefined);
+    // The fifth argument marks the title as auto-generated, which is what lets
+    // TripWatcher replace it with a place name once the first fix lands. A
+    // title the user typed here is theirs and is never overwritten.
+    const typed = title?.trim() ?? "";
+    startTrip(undefined, undefined, typed || autoTripName(t), selectedLureId ?? undefined, !typed);
     router.push("/map");
   }, [startTrip, selectedLureId, t]);
 

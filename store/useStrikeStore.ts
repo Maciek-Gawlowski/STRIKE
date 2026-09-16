@@ -80,7 +80,16 @@ type StrikeState = {
   recoveredStaleTrip: Trip | null;
   refreshWeather: (position?: Coordinate) => void;
   refreshWaterLevel: () => void;
-  startTrip: (position?: Coordinate, source?: "gps" | "mock", title?: string, lureId?: string) => void;
+  /**
+   * True while the active trip still carries the name the app generated for it.
+   * Set false the moment the user types a title, or once the place-based rename
+   * has run — either way the title is then the user's or final, and nothing
+   * overwrites it.
+   */
+  activeTripTitleIsAuto: boolean;
+  startTrip: (position?: Coordinate, source?: "gps" | "mock", title?: string, lureId?: string, titleIsAuto?: boolean) => void;
+  /** Rename the active trip, but only while its title is still auto-generated. */
+  renameActiveTrip: (title: string) => void;
   setActiveLure: (lureId: string | null) => void;
   changeLure: (lureId: string | null, lureName: string) => void;
   stopTrip: () => Trip | null;
@@ -243,6 +252,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
   lastCompletedTripId: null,
   locationSource: "mock",
   hasGpsFix: false,
+  activeTripTitleIsAuto: false,
   weather: null,
   waterLevel: null,
   mapType: "standard",
@@ -267,7 +277,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       }
     });
   },
-  startTrip: (position, source = "mock", title, lureId) => {
+  startTrip: (position, source = "mock", title, lureId, titleIsAuto = false) => {
     const startPosition = position ?? get().currentLocation ?? demoStart;
     const startedAt = new Date();
     const tripTitle = title?.trim() || defaultTripTitle(startedAt);
@@ -285,7 +295,8 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       activeTrip: trip,
       currentLocation: startPosition,
       locationSource: source,
-      lastCompletedTripId: null
+      lastCompletedTripId: null,
+      activeTripTitleIsAuto: titleIsAuto
     });
     // Insert the trip row now so following route points / events have a parent.
     enqueueWrite((db) => upsertTrip(db, trip));
@@ -293,6 +304,16 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     // Pull real conditions for the start location into the home weather strip.
     get().refreshWeather(startPosition);
     get().refreshWaterLevel();
+  },
+  renameActiveTrip: (title) => {
+    const state = get();
+    const trip = state.activeTrip;
+    const next = title.trim();
+    if (!trip || !state.activeTripTitleIsAuto || !next || next === trip.title) return;
+    const renamed = { ...trip, title: next };
+    set({ activeTrip: renamed, activeTripTitleIsAuto: false });
+    enqueueWrite((db) => upsertTrip(db, renamed));
+    persistAppState();
   },
   stopTrip: () => {
     const activeTrip = get().activeTrip;
