@@ -252,7 +252,7 @@ const dot = StyleSheet.create({
 
 const styles = StyleSheet.create({
   shell: {
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#0c1a17",
     borderWidth: 1,
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     left: 16,
     bottom: 16,
     right: 16,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 14,
     backgroundColor: "rgba(2, 18, 16, 0.76)"
   },

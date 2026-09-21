@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   photoBox: {
     height: 230,
-    borderRadius: 26,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.card,
     borderWidth: 1,
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
   },
   select: {
     height: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 112,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     color: Colors.textBright,
     textAlignVertical: "top",
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   },
   measureInput: {
     height: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 16,
     color: Colors.textBright,
     backgroundColor: Colors.field,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   toggle: {
     flex: 1,
     height: 56,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.field
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
   },
   save: {
     height: 62,
-    borderRadius: 20,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.64)"
   },
   modalCard: {
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.card,
     borderWidth: 1,

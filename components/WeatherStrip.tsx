@@ -58,16 +58,11 @@ export function WeatherStrip() {
 
 const styles = StyleSheet.create({
   wrap: {
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 18,
     backgroundColor: Colors.glassBg,
     borderWidth: 1,
     borderColor: Colors.glassBorder,
-    shadowColor: Colors.glowAmber,
-    shadowOpacity: 1,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4
   },
   grid: {
     flexDirection: "row",

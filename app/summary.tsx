@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   homeBtn: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.field,
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   },
   statBlock: {
     width: "47%",
-    borderRadius: 20,
+    borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 16,
     backgroundColor: Colors.card,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     padding: 14,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: Colors.glassBg,
     borderWidth: 1,
     borderColor: Colors.amber,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   secondary: {
     flex: 1,
     minHeight: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   primary: {
     flex: 1,
     minHeight: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",

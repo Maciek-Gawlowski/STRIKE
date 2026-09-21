@@ -333,7 +333,7 @@ const card = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.08)",
     alignSelf: "flex-start",
   },

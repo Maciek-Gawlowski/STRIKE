@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   back: {
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   card: {
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.card,
     borderWidth: 1,

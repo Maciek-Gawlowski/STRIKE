@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
   back: {
     height: 40,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
   editBtn: {
     height: 38,
     paddingHorizontal: 14,
-    borderRadius: 19,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
   editBtnSecondary: {
     height: 38,
     paddingHorizontal: 14,
-    borderRadius: 19,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -971,7 +971,7 @@ const styles = StyleSheet.create({
   },
   saveBtnLarge: {
     height: 56,
-    borderRadius: 18,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1035,7 +1035,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,

@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
 
   // Header hero card — no overflow:hidden (solid bg, nothing to clip)
   headerHero: {
-    borderRadius: 26,
+    borderRadius: 16,
     paddingTop: 18,
     paddingBottom: 26,
     paddingHorizontal: 8,
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
   },
   stopButton: {
     height: 64,
-    borderRadius: 20,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -778,11 +778,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dangerSoft,
     borderWidth: 1.5,
     borderColor: Colors.danger,
-    shadowColor: Colors.danger,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.38,
-    shadowRadius: 14,
-    elevation: 9,
   },
   stopText: {
     color: Colors.dangerText,
@@ -793,7 +788,7 @@ const styles = StyleSheet.create({
 
   // OVERBLIK
   overblikCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.glassBg,
     borderWidth: 1,
@@ -865,7 +860,7 @@ const styles = StyleSheet.create({
 
   // Welcome card
   welcomeCard: {
-    borderRadius: 26,
+    borderRadius: 16,
     gap: 8
   },
   welcomeTitle: {
@@ -897,7 +892,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     padding: 14,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border
@@ -940,7 +935,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.68)"
   },
   modalCard: {
-    borderRadius: 26,
+    borderRadius: 16,
     padding: 18,
     gap: 13,
     backgroundColor: Colors.card,
@@ -967,7 +962,7 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     minHeight: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 16,
     color: Colors.text,
     backgroundColor: Colors.field,
@@ -982,7 +977,7 @@ const styles = StyleSheet.create({
   modalSecondary: {
     flex: 1,
     minHeight: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.field
@@ -995,7 +990,7 @@ const styles = StyleSheet.create({
   modalPrimary: {
     flex: 1,
     minHeight: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1027,7 +1022,7 @@ const styles = StyleSheet.create({
     gap: 6,
     height: 36,
     paddingHorizontal: 12,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: Colors.field
   },
   lureChipActive: {
@@ -1068,7 +1063,7 @@ const liveBadge = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: Colors.amber
   },
   dot: {

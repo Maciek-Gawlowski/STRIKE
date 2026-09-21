@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   back: {
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   iconBtn: {
     height: 44,
     width: 44,
-    borderRadius: 22,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.field
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     height: 36,
     paddingHorizontal: 16,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: Colors.amber,
     alignItems: "center",
     justifyContent: "center"
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   // ── Timeline ──
   timeline: {
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 16,
     paddingBottom: 4,
     gap: 0,
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
   removeBtn: {
     height: 36,
     width: 36,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2

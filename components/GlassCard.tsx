@@ -9,14 +9,17 @@ type Props = {
 };
 
 /**
- * Frosted-glass surface card. Use glow=true for attention-grabbing cards
- * (TODAY strip, active-state summary). Callers pass layout-only styles
- * (padding, gap, borderRadius overrides) via the style prop; visual surface
- * tokens (bg, border, shadow) are owned by GlassCard.
+ * Frosted-glass surface card. Callers pass layout-only styles (padding, gap,
+ * borderRadius overrides) via the style prop; visual surface tokens (bg,
+ * border) are owned by GlassCard.
+ *
+ * `glow` stays in the props so existing call sites compile, but it no longer
+ * paints an amber halo. Depth here comes from the border against the
+ * background, not from a light source that does not exist.
  */
-export function GlassCard({ glow = false, style, children }: Props) {
+export function GlassCard({ style, children }: Props) {
   return (
-    <View style={[styles.base, glow && styles.glow, style]}>
+    <View style={[styles.base, style]}>
       {children}
     </View>
   );
@@ -24,17 +27,10 @@ export function GlassCard({ glow = false, style, children }: Props) {
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 22,
+    borderRadius: 16,
     backgroundColor: Colors.glassBg,
     borderWidth: 1,
     borderColor: Colors.glassBorder,
     overflow: "hidden"
-  },
-  glow: {
-    shadowColor: Colors.glowAmber,
-    shadowOpacity: 1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5
   }
 });

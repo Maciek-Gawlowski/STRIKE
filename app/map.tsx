@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   back: {
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.field
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   mapTypePill: {
     flex: 1,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.field
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   eventBtn: {
     flex: 1,
     minHeight: 96,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   },
   stopButton: {
     height: 64,
-    borderRadius: 20,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -379,11 +379,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dangerSoft,
     borderWidth: 1.5,
     borderColor: Colors.danger,
-    shadowColor: Colors.danger,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.38,
-    shadowRadius: 14,
-    elevation: 9,
   },
   stopText: {
     color: Colors.dangerText,
@@ -401,7 +396,7 @@ const styles = StyleSheet.create({
     gap: 6,
     height: 40,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: Colors.field,
     maxWidth: 180
   },
@@ -419,7 +414,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.64)"
   },
   modalCard: {
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.card,
     borderWidth: 1,

@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   },
   button: {
     minHeight: 60,
-    borderRadius: 18,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
   },
   avgTile: {
     width: "47%",
-    borderRadius: 18,
+    borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 14,
     backgroundColor: Colors.card,

@@ -33,16 +33,6 @@ const foreground = {
   catch:  Colors.catchText,
 } as const;
 
-// Glow colour applied as a drop-shadow under the button.
-const glowColor = {
-  green:  Colors.amber,
-  yellow: Colors.amber,
-  red:    Colors.danger,
-  steel:  "transparent",
-  blue:   "#3A86B0",
-  catch:  Colors.catchGreen,
-} as const;
-
 export function ActionButton({
   label,
   icon,
@@ -52,7 +42,6 @@ export function ActionButton({
   compact,
 }: ActionButtonProps) {
   const fg = foreground[tone];
-  const glow = glowColor[tone];
 
   return (
     <Pressable
@@ -60,12 +49,12 @@ export function ActionButton({
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
+      // No coloured glow under the button: a yellow halo behind a yellow
+      // button is the most recognisable "unfinished" cue in a mobile UI, and
+      // the gradient fill already lifts it off the background.
       style={({ pressed }) => [
         styles.pressable,
         compact && styles.pressableCompact,
-        // Tonal glow shadow (iOS: shadowColor; Android: elevation).
-        { shadowColor: glow, shadowOffset: { width: 0, height: compact ? 8 : 5 },
-          shadowOpacity: 0.42, shadowRadius: compact ? 18 : 12, elevation: compact ? 12 : 8 },
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}
@@ -116,10 +105,10 @@ const styles = StyleSheet.create({
     opacity: 0.42,
   },
 
-  // ── Full-width pill (64px horizontal) ──
+  // ── Full-width button (56px horizontal) ──
   button: {
-    height: 64,
-    borderRadius: 20,
+    height: 56,
+    borderRadius: 14,
     paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
@@ -144,8 +133,8 @@ const styles = StyleSheet.create({
   // ── Compact vertical card ──
   buttonCompact: {
     height: undefined,
-    minHeight: 96,
-    borderRadius: 18,
+    minHeight: 92,
+    borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: "column",

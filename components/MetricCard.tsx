@@ -20,7 +20,7 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     minWidth: "30%",
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 14,
     backgroundColor: Colors.card,
     borderWidth: 1,

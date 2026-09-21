@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   backBtn: {
     height: 40,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   // Toggles card
   togglesCard: {
     backgroundColor: Colors.card,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
     padding: 16,
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   // Share button
   shareBtn: {
     height: 58,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",

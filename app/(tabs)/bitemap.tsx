@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
   back: {
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 24,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -797,7 +797,7 @@ const styles = StyleSheet.create({
   },
   mapShell: {
     height: 520,
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: Colors.card,
     borderWidth: 1,
@@ -1082,7 +1082,7 @@ const styles = StyleSheet.create({
   hotspotCircle: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 2.5,
     backgroundColor: "#0D1B2AF0",
     alignItems: "center",
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: Colors.card,
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 24,
     gap: 16,
     width: "100%",

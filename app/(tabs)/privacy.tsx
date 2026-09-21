@@ -565,7 +565,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  back: { alignSelf: "flex-start", height: 48, paddingHorizontal: 14, borderRadius: 24, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.field },
+  back: { alignSelf: "flex-start", height: 48, paddingHorizontal: 14, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.field },
   backText: { color: Colors.text, fontFamily: Fonts.bodyBold, letterSpacing: 0 },
   titleBlock: { gap: 2 },
   kicker: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.bodySemibold, letterSpacing: 0 },
@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: Colors.textBright, fontSize: 18, fontFamily: Fonts.heading, letterSpacing: 0 },
   hintText: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.body, letterSpacing: 0, marginTop: 2, marginBottom: 4 },
   subSectionTitle: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.bodySemibold, letterSpacing: 0, textTransform: "uppercase", marginTop: 4 },
-  panel: { borderRadius: 24, padding: 16, gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
+  panel: { borderRadius: 16, padding: 16, gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
 
   photoSection: { flexDirection: "row", alignItems: "center", gap: 16 },
   avatar: { width: 72, height: 72, borderRadius: 36 },
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
   addLureBtn: { height: 46, paddingHorizontal: 18, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: Colors.amber },
   addLureBtnDisabled: { opacity: 0.4 },
   addLureBtnText: { color: Colors.textOnAmber, fontFamily: Fonts.bodyBold, fontSize: 14, letterSpacing: 0 },
-  saveBtn: { height: 62, borderRadius: 20, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, backgroundColor: Colors.amber },
+  saveBtn: { height: 62, borderRadius: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, backgroundColor: Colors.amber },
   saveBtnText: { color: Colors.textOnAmber, fontFamily: Fonts.heading, fontSize: 17, letterSpacing: 0 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   biteMapInfo: { color: Colors.textMuted, fontSize: 14, fontFamily: Fonts.body, lineHeight: 20, letterSpacing: 0 },
