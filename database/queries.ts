@@ -49,6 +49,10 @@ export type WeatherSnapshot = {
   windSpeed?: number;
   windDirection?: string;
   pressure?: number;
+  /** cm relative to DVR90. Only set when a live reading existed at event time. */
+  waterLevel?: number;
+  /** "rising" | "falling" | "stable" — the direction anglers actually ask about. */
+  waterLevelTrend?: string;
 };
 
 // --- Mappers ----------------------------------------------------------------
@@ -371,15 +375,18 @@ export async function insertWeatherSnapshot(
   snapshot: WeatherSnapshot
 ): Promise<void> {
   await db.runAsync(
-    `INSERT INTO weather_snapshots (id, event_id, air_temp, water_temp, wind_speed, wind_direction, pressure)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO weather_snapshots (id, event_id, air_temp, water_temp, wind_speed, wind_direction, pressure, water_level, water_level_trend)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        event_id = excluded.event_id,
        air_temp = excluded.air_temp,
        water_temp = excluded.water_temp,
        wind_speed = excluded.wind_speed,
        wind_direction = excluded.wind_direction,
-       pressure = excluded.pressure;`,
+       pressure = excluded.pressure,
+       -- Never overwrite a real reading with the null a later back-fill carries.
+       water_level = COALESCE(excluded.water_level, water_level),
+       water_level_trend = COALESCE(excluded.water_level_trend, water_level_trend);`,
     [
       snapshot.id,
       snapshot.eventId,
@@ -387,7 +394,9 @@ export async function insertWeatherSnapshot(
       snapshot.waterTemp ?? null,
       snapshot.windSpeed ?? null,
       snapshot.windDirection ?? null,
-      snapshot.pressure ?? null
+      snapshot.pressure ?? null,
+      snapshot.waterLevel ?? null,
+      snapshot.waterLevelTrend ?? null
     ]
   );
 }
@@ -404,6 +413,8 @@ export async function getWeatherForEvent(
     wind_speed: number | null;
     wind_direction: string | null;
     pressure: number | null;
+    water_level: number | null;
+    water_level_trend: string | null;
   }>("SELECT * FROM weather_snapshots WHERE event_id = ? LIMIT 1;", [eventId]);
   if (!row) {
     return null;
@@ -415,6 +426,8 @@ export async function getWeatherForEvent(
     waterTemp: row.water_temp ?? undefined,
     windSpeed: row.wind_speed ?? undefined,
     windDirection: row.wind_direction ?? undefined,
-    pressure: row.pressure ?? undefined
+    pressure: row.pressure ?? undefined,
+    waterLevel: row.water_level ?? undefined,
+    waterLevelTrend: row.water_level_trend ?? undefined
   };
 }

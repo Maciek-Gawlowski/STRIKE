@@ -159,7 +159,11 @@ export async function fetchWeather(lat: number, lng: number): Promise<WeatherDat
 
 // --- Persistence ------------------------------------------------------------
 
-function toSnapshot(eventId: string, data: WeatherData): WeatherSnapshot {
+function toSnapshot(
+  eventId: string,
+  data: WeatherData,
+  water?: { level: number; trend: string } | null
+): WeatherSnapshot {
   return {
     // Deterministic id keyed on the event so re-syncing is idempotent.
     id: `wx-${eventId}`,
@@ -169,7 +173,12 @@ function toSnapshot(eventId: string, data: WeatherData): WeatherSnapshot {
     windSpeed: data.windSpeed,
     // Stored as a compass label (the wind_direction column is TEXT).
     windDirection: degreesToCompass(data.windDirection),
-    pressure: data.pressure
+    pressure: data.pressure,
+    // Only present when the caller had a live reading. The back-fill paths pass
+    // nothing: a tide measured days after the catch is not that catch's tide,
+    // and a wrong value is worse here than a missing one.
+    waterLevel: water?.level,
+    waterLevelTrend: water?.trend
   };
 }
 
@@ -179,8 +188,12 @@ function toSnapshot(eventId: string, data: WeatherData): WeatherSnapshot {
  * store's weather object is available so every event type gets conditions
  * without an extra API round-trip.
  */
-export function storeWeatherForEvent(eventId: string, data: WeatherData): void {
-  enqueueWrite((db) => insertWeatherSnapshot(db, toSnapshot(eventId, data)));
+export function storeWeatherForEvent(
+  eventId: string,
+  data: WeatherData,
+  water?: { level: number; trend: string } | null
+): void {
+  enqueueWrite((db) => insertWeatherSnapshot(db, toSnapshot(eventId, data, water)));
 }
 
 /**

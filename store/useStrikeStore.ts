@@ -438,7 +438,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     // Snapshot the already-fetched conditions — no extra API call. If weather
     // isn't available yet (offline start), syncPendingWeather() back-fills it.
     if (state.weather) {
-      storeWeatherForEvent(event.id, state.weather);
+      storeWeatherForEvent(event.id, state.weather, state.waterLevel);
     }
 
     // Activity Map: upload area-level activity — h3Cell only, never exact GPS.

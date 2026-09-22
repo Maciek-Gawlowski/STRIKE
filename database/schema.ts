@@ -44,9 +44,18 @@ import type { SQLiteDatabase } from "expo-sqlite";
  *  v12 -> spots table: private, device-only saved locations. Never uploaded or
  *         included in Bite Map aggregation. Created via CREATE TABLE IF NOT EXISTS
  *         in the initial block; this version just stamps the counter.
+ *  v17 -> weather_snapshots.water_level + water_level_trend. Water level was only
+ *         ever fetched live for the home screen and thrown away; nothing kept it
+ *         against the catch it belonged to. It is one of the conditions anglers
+ *         actually filter on, and unlike moon phase it CANNOT be reconstructed
+ *         afterwards — a reading taken a week later is a different tide. So the
+ *         column goes in before the alpha, even though nothing reads it yet:
+ *         every catch logged from now on carries its water level, and the
+ *         analysis built on top of it later starts with real history instead of
+ *         an empty column.
  */
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 export const CREATE_TRIPS_TABLE = `
   CREATE TABLE IF NOT EXISTS trips (
@@ -112,6 +121,8 @@ export const CREATE_WEATHER_SNAPSHOTS_TABLE = `
     wind_speed     REAL,
     wind_direction TEXT,
     pressure       REAL,
+    water_level    REAL,
+    water_level_trend TEXT,
     FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE
   );
 `;
@@ -363,6 +374,20 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       await db.execAsync("ALTER TABLE profile ADD COLUMN gear TEXT;");
     }
     current = 16;
+  }
+
+  // v17: water level recorded alongside the rest of the conditions.
+  // Only written when a live reading exists at the moment of the event — the
+  // offline back-fill paths leave it null rather than stamp a catch with a tide
+  // measured days later.
+  if (current < 17) {
+    if (!(await columnExists(db, "weather_snapshots", "water_level"))) {
+      await db.execAsync("ALTER TABLE weather_snapshots ADD COLUMN water_level REAL;");
+    }
+    if (!(await columnExists(db, "weather_snapshots", "water_level_trend"))) {
+      await db.execAsync("ALTER TABLE weather_snapshots ADD COLUMN water_level_trend TEXT;");
+    }
+    current = 17;
   }
 
   if (current !== SCHEMA_VERSION) {
