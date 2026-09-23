@@ -1,4 +1,4 @@
-# STRIKE — Sea Trout Fishing App
+# STRIKE - Sea Trout Fishing App
 
 Cross-platform mobile app for anglers. Log trips, track catches, and see a community bite-map. Built end-to-end.
 
