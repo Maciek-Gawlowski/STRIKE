@@ -108,6 +108,12 @@ export default function HomeScreen() {
   const [now, setNow] = useState(Date.now());
   const [tripNameOpen, setTripNameOpen] = useState(false);
   const [tripTitle, setTripTitle] = useState("");
+  // What we pre-filled the name field with. Pressing straight through a
+  // suggestion is not the user naming the trip — without this, the suggested
+  // name (itself copied from a nearby earlier trip) counted as typed, the
+  // place-based rename never fired, and "Late morning session" propagated from
+  // one trip to the next forever.
+  const suggestedTitleRef = useRef("");
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [modalLures, setModalLures] = useState<Lure[]>([]);
   const [streakData, setStreakData] = useState<StreakData | null>(null);
@@ -139,6 +145,30 @@ export default function HomeScreen() {
   useEffect(() => {
     getStreakData().then(setStreakData).catch(() => null);
   }, [trips.length]);
+
+  /**
+   * Your own history at the spot you are standing on.
+   *
+   * The app already worked this out — suggestTripName looks for a finished trip
+   * that started within SAME_SPOT_METERS — but it only ever showed the result
+   * on the review screen for a trip you had already finished. That is the one
+   * moment the information is worthless. It is worth something when you are on
+   * the beach deciding whether to stay, so it goes above the Start button.
+   */
+  const spotHistory = useMemo(() => {
+    if (activeTrip || !currentLocation || !hasGpsFix) return null;
+    const nearby = trips.filter((trip) => {
+      const start = trip.route[0];
+      return start && metersBetween(currentLocation, start) <= SAME_SPOT_METERS;
+    });
+    if (nearby.length === 0) return null;
+    const events = nearby.flatMap((trip) => trip.events);
+    return {
+      trips: nearby.length,
+      catches: events.filter((e) => e.type === "catch").length,
+      contacts: events.filter((e) => e.type === "contact").length
+    };
+  }, [activeTrip, currentLocation, hasGpsFix, trips]);
 
   // The trip shown in OVERBLIK: active trip if running, otherwise last completed trip.
   const displayTrip = activeTrip ?? trips[0] ?? null;
@@ -206,6 +236,7 @@ export default function HomeScreen() {
       } catch { /* fall through to empty, user can type a name */ }
     }
 
+    suggestedTitleRef.current = defaultTitle;
     setTripTitle(defaultTitle);
     getDb().then(getLures).then((list) => {
       setModalLures(list);
@@ -223,8 +254,10 @@ export default function HomeScreen() {
     // The fifth argument marks the title as auto-generated, which is what lets
     // TripWatcher replace it with a place name once the first fix lands. A
     // title the user typed here is theirs and is never overwritten.
-    const typed = title?.trim() ?? "";
-    startTrip(undefined, undefined, typed || autoTripName(t), selectedLureId ?? undefined, !typed);
+    const candidate = title?.trim() ?? "";
+    const edited = candidate !== "" && candidate !== suggestedTitleRef.current.trim();
+    const typed = edited ? candidate : "";
+    startTrip(undefined, undefined, typed || candidate || autoTripName(t), selectedLureId ?? undefined, !typed);
     router.push("/map");
   }, [startTrip, selectedLureId, t]);
 
@@ -375,12 +408,26 @@ export default function HomeScreen() {
 
       {/* ── Primary CTA ── */}
       {!activeTrip ? (
-        <ActionButton
-          label={t("actions.startTrip")}
-          icon="navigate-circle-outline"
-          tone="green"
-          onPress={handleStartPress}
-        />
+        <>
+          {spotHistory ? (
+            <View style={styles.spotHistory}>
+              <Ionicons name="time-outline" size={14} color={Colors.amber} />
+              <Text style={styles.spotHistoryText}>
+                {t("home.spotHistory", {
+                  trips: spotHistory.trips,
+                  catches: spotHistory.catches,
+                  contacts: spotHistory.contacts
+                })}
+              </Text>
+            </View>
+          ) : null}
+          <ActionButton
+            label={t("actions.startTrip")}
+            icon="navigate-circle-outline"
+            tone="green"
+            onPress={handleStartPress}
+          />
+        </>
       ) : (
         <>
           <View style={styles.eventRow}>
@@ -764,6 +811,23 @@ const styles = StyleSheet.create({
 
 
   // Active trip: event row + stop
+  spotHistory: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.amberSoft,
+    marginBottom: -8,
+  },
+  spotHistoryText: {
+    color: Colors.text,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 12,
+    letterSpacing: 0,
+  },
   eventRow: {
     flexDirection: "row",
     gap: 10

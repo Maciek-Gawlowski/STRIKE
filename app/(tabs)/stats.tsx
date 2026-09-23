@@ -313,6 +313,9 @@ function TimeOfDayRing({ hourCounts, t }: { hourCounts: number[]; t: (k: string)
 type MonthBucket = { key: string; label: string; catches: number; contacts: number; following: number };
 type SpeciesBucket = { species: string; count: number };
 
+/** Mirrors MAX_TRIP_DURATION_S in services/statistics.ts — keep the two equal. */
+const MAX_TRIP_DURATION_S = 12 * 3600;
+
 const N_MONTHS = 6;
 const MBAR_W = 288, MBAR_H = 130;
 const MBAR_BOTTOM = 20, MBAR_TOP = 8, MBAR_GAP = 7;
@@ -511,8 +514,21 @@ export default function StatsScreen() {
   // Completed trips only — the tiles above come from getStatistics(), which
   // counts finished trips. Folding the trip that is running right now into the
   // charts below made the same screen show two different totals for catches.
+  // Completed trips only, and only the ones getStatistics() counts. The tiles
+  // above come from the database, which drops sessions longer than 12 hours as
+  // abandoned; these in-memory charts were not dropping them, so the species
+  // list and the monthly chart added up to more catches than the tile beside
+  // them claimed. Same threshold, same trips, one answer.
   const allEvents = useMemo(
-    () => trips.flatMap((trip) => trip.events),
+    () =>
+      trips
+        .filter((trip) => {
+          if (!trip.endedAt) return false;
+          const seconds =
+            (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
+          return seconds <= MAX_TRIP_DURATION_S;
+        })
+        .flatMap((trip) => trip.events),
     [trips]
   );
 

@@ -1,6 +1,5 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { PropsWithChildren, ReactElement } from "react";
-import { RefreshControlProps, ScrollView, StyleSheet, ViewStyle } from "react-native";
+import { RefreshControlProps, ScrollView, StyleSheet, View, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/theme/colors";
 
@@ -11,7 +10,7 @@ type ScreenProps = PropsWithChildren<{
 
 export function Screen({ children, contentStyle, refreshControl }: ScreenProps) {
   return (
-    <LinearGradient colors={[Colors.bgTop, Colors.bgMid, Colors.bgBottom]} style={styles.fill}>
+    <View style={styles.fill}>
       <SafeAreaView style={styles.fill}>
         <ScrollView
           contentContainerStyle={[styles.content, contentStyle]}
@@ -21,18 +20,22 @@ export function Screen({ children, contentStyle, refreshControl }: ScreenProps) 
           {children}
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: {
-    flex: 1
+    flex: 1,
+    // One flat ground instead of a three-stop gradient. The gradient was
+    // subtle enough to look like a rendering artefact on some screens and
+    // obvious enough to tint cards differently top and bottom on others.
+    backgroundColor: Colors.bgMid
   },
   content: {
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 36,
-    gap: 18
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 40,
+    gap: 22
   }
 });

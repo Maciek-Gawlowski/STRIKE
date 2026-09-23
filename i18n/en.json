@@ -91,6 +91,7 @@
     "modalPlaceholder": "Stevns Klint, North point...",
     "startingLure": "Starting lure",
     "cancelTripStart": "Cancel",
+    "spotHistory": "You've fished here {{trips}} times · {{catches}} catches · {{contacts}} contacts",
     "tripNamePlace": "{{place}} · {{time}}",
     "tripMorning": "Morning session",
     "tripLateMorning": "Late morning session",

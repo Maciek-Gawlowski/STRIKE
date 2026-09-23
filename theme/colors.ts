@@ -13,10 +13,14 @@ export const Colors = {
   grey: "#D9DAD5", // primary text / labels
   amber: "#FFBA00", // highlights, CTAs, active state
 
-  // Background ramp (used by the screen gradient — navy shades)
-  bgTop: "#0B1622",
-  bgMid: "#0D1B2A",
-  bgBottom: "#12283A",
+  // Background ramp. Deliberately almost flat: the old ramp ran navy into a
+  // teal that tinted the bottom of every screen, so the interface itself had a
+  // colour and anything placed on it read as stuck on top. A near-neutral
+  // ground lets maps, photos and the amber do the colouring — which is exactly
+  // why Strava's near-black chrome disappears and its content doesn't.
+  bgTop: "#0A121B",
+  bgMid: "#0B1521",
+  bgBottom: "#0C1825",
 
   // Text
   text: "#D9DAD5", // body / labels
@@ -28,9 +32,12 @@ export const Colors = {
   card: "#1B3A4B",
   cardElevated: "#21455A",
   pill: "#0D1B2A", // dark pill on a teal card
-  field: "rgba(217, 218, 213, 0.08)", // inputs / inactive toggles / icon buttons
-  border: "rgba(217, 218, 213, 0.12)",
-  borderStrong: "rgba(217, 218, 213, 0.2)",
+  field: "rgba(217, 218, 213, 0.06)", // inputs / inactive toggles / icon buttons
+  // Cards are separated by being lighter than the ground, not by being drawn
+  // around. A visible 1px outline on every card is the single biggest reason
+  // an interface reads as boxy rather than composed.
+  border: "rgba(217, 218, 213, 0.05)",
+  borderStrong: "rgba(217, 218, 213, 0.12)",
 
   // Functional (kept semantically the same as before)
   amberSoft: "rgba(255, 186, 0, 0.16)", // amber tint backgrounds
@@ -38,9 +45,9 @@ export const Colors = {
   dangerSoft: "rgba(244, 91, 91, 0.22)",
   dangerText: "#FFE4E4",
 
-  // Glass design system
-  glassBg: "rgba(27, 58, 75, 0.72)",       // frosted teal surface
-  glassBorder: "rgba(217, 218, 213, 0.15)", // glass-edge highlight
+  // Card surface: a step up in lightness from the ground, not a tinted pane.
+  glassBg: "#141F2C",
+  glassBorder: "rgba(217, 218, 213, 0.05)",
   glowAmber: "rgba(255, 186, 0, 0.24)",     // amber halo (glow=true cards)
 
   // Activity level colors — Bite Map zone markers and legend

@@ -8,14 +8,18 @@ type Props = {
   onLinkPress?: () => void;
 };
 
-/** Section chrome row: amber left-bar + small-caps title + optional right link. */
+/**
+ * Section chrome row: small-caps title + optional right link.
+ *
+ * The amber bar that used to sit in front of every heading is gone. Amber was
+ * doing five jobs at once — primary button, section marker, link, active tab,
+ * chart series — and a colour used for everything signals nothing. It now means
+ * one thing: the thing you tap.
+ */
 export function SectionHeader({ title, linkLabel, onLinkPress }: Props) {
   return (
     <View style={styles.row}>
-      <View style={styles.titleGroup}>
-        <View style={styles.bar} />
-        <Text style={styles.title}>{title}</Text>
-      </View>
+      <Text style={styles.title}>{title}</Text>
       {linkLabel && onLinkPress ? (
         <Pressable hitSlop={8} onPress={onLinkPress}>
           <Text style={styles.link}>{linkLabel}</Text>
@@ -31,22 +35,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between"
   },
-  titleGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8
-  },
-  bar: {
-    width: 2,
-    height: 14,
-    borderRadius: 1,
-    backgroundColor: Colors.amber
-  },
   title: {
     color: Colors.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Fonts.bodySemibold,
-    letterSpacing: 1.5,
+    letterSpacing: 0.8,
     textTransform: "uppercase"
   },
   link: {
