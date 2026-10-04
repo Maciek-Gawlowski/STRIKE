@@ -22,6 +22,8 @@ import {
 } from "@/services/weather";
 import { deleteBiteMapEvents, flushBiteMapDeleteQueue, resyncBiteMapEvent, uploadBiteMapEvent } from "@/services/biteMap";
 import { flushFeedbackQueue } from "@/services/feedback";
+import { eraseAllLocalData } from "@/database/queries";
+import { clearAllPreferences } from "@/database/preferences";
 import { latLngToCell } from "@/services/hexGrid";
 import { storeWeatherForEvent } from "@/services/weather";
 import { getWaterLevel, type WaterLevelData } from "@/services/dmi";
@@ -79,7 +81,14 @@ type StrikeState = {
   mapType: MapType;
   recoveredStaleTrip: Trip | null;
   refreshWeather: (position?: Coordinate) => void;
-  refreshWaterLevel: () => void;
+  refreshWaterLevel: (position?: Coordinate | null) => void;
+  /**
+   * Withdraws everything this install has contributed, then wipes the device.
+   * Returns false if the server could not be reached, in which case nothing
+   * local is deleted — otherwise the ids needed to withdraw those rows would
+   * be gone and the observations would be stranded on the server forever.
+   */
+  eraseAllData: () => Promise<boolean>;
   /**
    * True while the active trip still carries the name the app generated for it.
    * Set false the moment the user types a title, or once the place-based rename
@@ -285,13 +294,54 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       }
     });
   },
-  refreshWaterLevel: () => {
+  refreshWaterLevel: (position) => {
+    // The station is chosen by proximity, so the position matters: reading a
+    // hardcoded station meant an angler in Copenhagen saw the tide on Als.
+    // Falls back to the last known location, and then to whichever station
+    // last answered, because the app is often opened before the first fix.
+    const where = position ?? get().activeTrip?.route.at(-1) ?? get().currentLocation ?? null;
     // Fire-and-forget; cached for 15 min inside getWaterLevel().
-    void getWaterLevel().then((data) => {
+    void getWaterLevel(where).then((data) => {
       if (data) {
         set({ waterLevel: data });
       }
     });
+  },
+  eraseAllData: async () => {
+    const state = get();
+    // Server first. A local wipe destroys every local_event_id, and those ids
+    // are the only handle anything has on the rows in bite_map_events — delete
+    // them here and those observations can never be withdrawn by anyone.
+    const ids = [
+      ...state.trips.flatMap((trip) => trip.events.map((event) => event.id)),
+      ...(state.activeTrip?.events.map((event) => event.id) ?? [])
+    ];
+    try {
+      await deleteBiteMapEvents(ids);
+    } catch (error) {
+      console.warn("[strike/store] erase aborted, server unreachable", error);
+      return false;
+    }
+
+    try {
+      const db = await getDb();
+      await eraseAllLocalData(db);
+      await clearAllPreferences();
+    } catch (error) {
+      console.warn("[strike/store] local erase failed", error);
+      return false;
+    }
+
+    lastRoutePointAt = null;
+    set({
+      trips: [],
+      activeTrip: null,
+      recoveredStaleTrip: null,
+      lastCompletedTripId: null,
+      backgroundGapSeconds: 0,
+      hasGpsFix: false
+    });
+    return true;
   },
   startTrip: (position, source = "mock", title, lureId, titleIsAuto = false) => {
     const startPosition = position ?? get().currentLocation ?? demoStart;
@@ -320,7 +370,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     persistAppState();
     // Pull real conditions for the start location into the home weather strip.
     get().refreshWeather(startPosition);
-    get().refreshWaterLevel();
+    get().refreshWaterLevel(startPosition);
   },
   renameActiveTrip: (title) => {
     const state = get();

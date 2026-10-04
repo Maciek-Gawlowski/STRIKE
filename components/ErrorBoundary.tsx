@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { recordCrash } from "@/database/preferences";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
 
@@ -27,6 +28,11 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     console.error("[strike/boundary] unhandled render error", error, info);
+    // Keep it for the feedback screen. A crash that only prints to a console
+    // nobody can open is a crash we will never hear about in any useful form.
+    void recordCrash(
+      `${error.name}: ${error.message}\n${(info.componentStack ?? "").split("\n").slice(0, 6).join("\n")}`
+    );
   }
 
   handleReset = (): void => {
@@ -57,14 +63,14 @@ const fb = StyleSheet.create({
   wordmark: {
     color: Colors.amber,
     fontFamily: Fonts.black,
-    fontSize: 36,
+    fontSize: 34,
     letterSpacing: 4,
     marginBottom: 8,
   },
   heading: {
     color: Colors.textBright,
     fontFamily: Fonts.heading,
-    fontSize: 22,
+    fontSize: 20,
     letterSpacing: 0,
     textAlign: "center",
   },

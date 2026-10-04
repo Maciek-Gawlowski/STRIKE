@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import { clearFeedbackQueueItem, getFeedbackQueue, type FeedbackData } from "@/database/queries";
 import { supabase } from "./supabase";
+import { recordSyncFailure, recordSyncSuccess } from "./syncStatus";
 
 /**
  * Sends a single feedback row to Supabase. Throws on failure (network/RLS)
@@ -17,7 +18,11 @@ export async function sendFeedback(row: FeedbackData): Promise<void> {
     device_model: row.deviceModel,
     local_user_id: row.localUserId
   });
-  if (error) throw error;
+  if (error) {
+    recordSyncFailure("feedback", error, "write");
+    throw error;
+  }
+  recordSyncSuccess("write");
 }
 
 /**

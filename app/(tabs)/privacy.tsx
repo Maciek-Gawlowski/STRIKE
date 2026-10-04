@@ -2,7 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import Constants from "expo-constants";
+import { appBuild, appVersion } from "@/services/appInfo";
+import { subscribeSyncStatus, type SyncStatus } from "@/services/syncStatus";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { deleteSpot, getSpots, type Spot } from "@/database/spots";
@@ -17,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { Screen } from "@/components/Screen";
+import { useStrikeStore } from "@/store/useStrikeStore";
 import { getDb } from "@/database/db";
 import {
   deleteLure,
@@ -92,11 +94,18 @@ const pickerStyles = StyleSheet.create({
   strip: { flexDirection: "row", gap: 10, paddingVertical: 2 },
   dot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   dotSelected: { borderWidth: 2.5, borderColor: Colors.textBright },
-  name: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 12, letterSpacing: 0 },
+  name: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 13, letterSpacing: 0 },
 });
 
 export default function ProfileScreen() {
   const { t, locale, setLocale } = useTranslation();
+
+  // Server status, shown at the bottom of this screen. See services/syncStatus.ts
+  // for why it lives in the UI rather than in a log file nobody can open.
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [erasing, setErasing] = useState(false);
+  const eraseAllData = useStrikeStore((state) => state.eraseAllData);
+  useEffect(() => subscribeSyncStatus(setSyncStatus), []);
 
   const [displayName, setDisplayName] = useState("");
   const [fishingMethods, setFishingMethods] = useState<string[]>([]);
@@ -281,7 +290,6 @@ export default function ProfileScreen() {
   return (
     <Screen>
       <View style={styles.titleBlock}>
-        <Text style={styles.kicker}>{t("profile.kicker")}</Text>
         <Text style={styles.title}>{t("profile.title")}</Text>
       </View>
 
@@ -551,12 +559,93 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
+      <Text style={styles.subSectionTitle}>{t("settings.serverStatus")}</Text>
+      <View style={styles.panel}>
+        <View style={styles.syncRow}>
+          <View
+            style={[
+              styles.syncDot,
+              syncStatus?.health === "ok" && { backgroundColor: Colors.catchGreen },
+              (syncStatus?.health === "failing" || syncStatus?.health === "unconfigured") && {
+                backgroundColor: Colors.danger
+              }
+            ]}
+          />
+          <Text style={styles.syncLabel}>
+            {t(
+              syncStatus?.health === "ok"
+                ? "settings.syncOk"
+                : syncStatus?.health === "failing"
+                  ? "settings.syncFailing"
+                  : syncStatus?.health === "unconfigured"
+                    ? "settings.syncUnconfigured"
+                    : syncStatus?.readsOk
+                      ? "settings.syncReadOnly"
+                      : "settings.syncUnknown"
+            )}
+          </Text>
+        </View>
+        {syncStatus?.message ? (
+          // Deliberately the server's own untranslated words. A tester reading
+          // this line aloud is the fastest diagnosis available to us.
+          <Text style={styles.syncDetail} selectable>
+            {syncStatus.stage}: {syncStatus.message}
+          </Text>
+        ) : null}
+      </View>
+
+      <Text style={styles.subSectionTitle}>{t("settings.yourData")}</Text>
+      <View style={styles.panel}>
+        <Text style={styles.biteMapInfo}>{t("settings.eraseExplain")}</Text>
+        <Pressable
+          style={styles.eraseBtn}
+          disabled={erasing}
+          onPress={() => {
+            // Two steps on purpose. This is the only irreversible action in the
+            // app, and the second prompt states the one consequence people do
+            // not expect: it also withdraws what they shared with everyone else.
+            Alert.alert(
+              t("settings.eraseConfirmTitle"),
+              t("settings.eraseConfirmBody"),
+              [
+                { text: t("common.cancel"), style: "cancel" },
+                {
+                  text: t("settings.eraseConfirmBtn"),
+                  style: "destructive",
+                  onPress: () => {
+                    setErasing(true);
+                    void eraseAllData()
+                      .then((ok) => {
+                        setErasing(false);
+                        Alert.alert(
+                          ok ? t("settings.eraseDoneTitle") : t("settings.eraseFailedTitle"),
+                          ok ? t("settings.eraseDoneBody") : t("settings.eraseFailedBody")
+                        );
+                      })
+                      .catch(() => setErasing(false));
+                  }
+                }
+              ]
+            );
+          }}
+        >
+          <Ionicons
+            name={erasing ? "hourglass-outline" : "trash-outline"}
+            size={18}
+            color={Colors.dangerText}
+          />
+          <Text style={styles.eraseBtnText}>
+            {t(erasing ? "settings.erasing" : "settings.eraseAll")}
+          </Text>
+        </Pressable>
+      </View>
+
       <View style={styles.aboutBlock}>
         <Text style={styles.aboutWordmark}>STRIKE</Text>
         <Text style={styles.aboutVersion}>
-          {t("settings.version")} {Constants.expoConfig?.version ?? "—"}
+          {t("settings.version")} {appVersion}
           {"  ·  "}
-          {t("settings.build")} {(Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "—").toString()}
+          {t("settings.build")} {appBuild}
         </Text>
         <Text style={styles.aboutTagline}>{t("home.tagline")}</Text>
       </View>
@@ -568,56 +657,61 @@ const styles = StyleSheet.create({
   back: { alignSelf: "flex-start", height: 48, paddingHorizontal: 14, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.field },
   backText: { color: Colors.text, fontFamily: Fonts.bodyBold, letterSpacing: 0 },
   titleBlock: { gap: 2 },
-  kicker: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.bodySemibold, letterSpacing: 0 },
-  title: { color: Colors.textBright, fontSize: 35, fontFamily: Fonts.heading, letterSpacing: 0 },
-  sectionTitle: { color: Colors.textBright, fontSize: 18, fontFamily: Fonts.heading, letterSpacing: 0 },
-  hintText: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.body, letterSpacing: 0, marginTop: 2, marginBottom: 4 },
-  subSectionTitle: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.bodySemibold, letterSpacing: 0, textTransform: "uppercase", marginTop: 4 },
+  title: { color: Colors.textBright, fontSize: 34, fontFamily: Fonts.heading, letterSpacing: 0 },
+  sectionTitle: { color: Colors.textBright, fontSize: 17, fontFamily: Fonts.heading, letterSpacing: 0 },
+  hintText: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.body, letterSpacing: 0, marginTop: 2, marginBottom: 4 },
+  eraseBtn: { height: 50, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.dangerSoft, borderWidth: 1, borderColor: Colors.danger },
+  eraseBtnText: { color: Colors.dangerText, fontFamily: Fonts.bodyBold, fontSize: 15, letterSpacing: 0 },
+  subSectionTitle: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.bodySemibold, letterSpacing: 0, textTransform: "uppercase", marginTop: 4 },
+  syncRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  syncDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.textMuted },
+  syncLabel: { flex: 1, color: Colors.text, fontFamily: Fonts.bodySemibold, fontSize: 13, letterSpacing: 0 },
+  syncDetail: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 11, lineHeight: 16, marginTop: 8 },
   panel: { borderRadius: 16, padding: 16, gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
 
   photoSection: { flexDirection: "row", alignItems: "center", gap: 16 },
   avatar: { width: 72, height: 72, borderRadius: 36 },
   avatarPlaceholder: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.field, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
-  photoLabel: { color: Colors.text, fontFamily: Fonts.bodySemibold, fontSize: 14, letterSpacing: 0 },
+  photoLabel: { color: Colors.text, fontFamily: Fonts.bodySemibold, fontSize: 13, letterSpacing: 0 },
 
-  nameInput: { color: Colors.textBright, fontFamily: Fonts.bodyBold, fontSize: 16, letterSpacing: 0, height: 44 },
+  nameInput: { color: Colors.textBright, fontFamily: Fonts.bodyBold, fontSize: 15, letterSpacing: 0, height: 44 },
   pillRow: { flexDirection: "row", gap: 8 },
   pillWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { flex: 1, minHeight: 52, borderRadius: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, backgroundColor: Colors.field },
   pillSpecies: { minHeight: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, backgroundColor: Colors.field },
-  pillActive: { backgroundColor: Colors.amber },
+  pillActive: { backgroundColor: Colors.cardElevated, borderWidth: 1, borderColor: Colors.amber },
   pillText: { color: Colors.text, fontFamily: Fonts.bodyBold, fontSize: 13, letterSpacing: 0, textAlign: "center" },
-  pillTextActive: { color: Colors.textOnAmber },
+  pillTextActive: { color: Colors.textBright },
   textField: { height: 46, borderRadius: 14, paddingHorizontal: 14, backgroundColor: Colors.field, color: Colors.textBright, fontFamily: Fonts.body, fontSize: 15, letterSpacing: 0 },
-  emptyText: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 14, letterSpacing: 0 },
+  emptyText: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 13, letterSpacing: 0 },
   lureRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 },
   lureName: { flex: 1, color: Colors.textBright, fontFamily: Fonts.bodyMedium, fontSize: 15, letterSpacing: 0 },
   editBlock: { gap: 10, paddingBottom: 4 },
   editActions: { flexDirection: "row", alignItems: "center", gap: 12 },
   editSaveBtn: { flex: 1, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: Colors.amber },
-  editSaveBtnText: { color: Colors.textOnAmber, fontFamily: Fonts.bodyBold, fontSize: 14, letterSpacing: 0 },
-  editCancelText: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 14, letterSpacing: 0 },
+  editSaveBtnText: { color: Colors.textOnAmber, fontFamily: Fonts.bodyBold, fontSize: 13, letterSpacing: 0 },
+  editCancelText: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 13, letterSpacing: 0 },
   addLureRow: { flexDirection: "row", gap: 10, alignItems: "center" },
   addLureRowBordered: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12 },
   addLureInput: { flex: 1, height: 46, borderRadius: 14, paddingHorizontal: 14, backgroundColor: Colors.field, color: Colors.textBright, fontFamily: Fonts.body, fontSize: 15, letterSpacing: 0 },
   addLureBtn: { height: 46, paddingHorizontal: 18, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: Colors.amber },
   addLureBtnDisabled: { opacity: 0.4 },
-  addLureBtnText: { color: Colors.textOnAmber, fontFamily: Fonts.bodyBold, fontSize: 14, letterSpacing: 0 },
+  addLureBtnText: { color: Colors.textOnAmber, fontFamily: Fonts.bodyBold, fontSize: 13, letterSpacing: 0 },
   saveBtn: { height: 62, borderRadius: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, backgroundColor: Colors.amber },
   saveBtnText: { color: Colors.textOnAmber, fontFamily: Fonts.heading, fontSize: 17, letterSpacing: 0 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
-  biteMapInfo: { color: Colors.textMuted, fontSize: 14, fontFamily: Fonts.body, lineHeight: 20, letterSpacing: 0 },
+  biteMapInfo: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.body, lineHeight: 20, letterSpacing: 0 },
   introButton: { flexDirection: "row", alignItems: "center", gap: 10 },
   introButtonText: { color: Colors.text, fontSize: 15, fontFamily: Fonts.bodySemibold, letterSpacing: 0 },
   langConfirm: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
   langConfirmText: { color: Colors.amber, fontFamily: Fonts.bodySemibold, fontSize: 13, letterSpacing: 0 },
   aboutBlock: { alignItems: "center", gap: 6, paddingVertical: 20, marginTop: 8 },
-  aboutWordmark: { color: Colors.textMuted, fontFamily: Fonts.black, fontSize: 18, letterSpacing: 4 },
-  aboutVersion: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 12, letterSpacing: 0 },
-  aboutTagline: { color: Colors.border, fontFamily: Fonts.bodySemibold, fontSize: 10, letterSpacing: 2 },
+  aboutWordmark: { color: Colors.textMuted, fontFamily: Fonts.black, fontSize: 17, letterSpacing: 4 },
+  aboutVersion: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 13, letterSpacing: 0 },
+  aboutTagline: { color: Colors.border, fontFamily: Fonts.bodySemibold, fontSize: 11, letterSpacing: 2 },
   spotRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 },
   spotRowText: { flex: 1, gap: 1 },
   spotRowName: { color: Colors.textBright, fontFamily: Fonts.bodyMedium, fontSize: 15, letterSpacing: 0 },
-  spotRowNote: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 12, letterSpacing: 0 },
-  spotPrivacyNote: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 12, letterSpacing: 0, marginTop: 4 },
+  spotRowNote: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 13, letterSpacing: 0 },
+  spotPrivacyNote: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 13, letterSpacing: 0, marginTop: 4 },
 });

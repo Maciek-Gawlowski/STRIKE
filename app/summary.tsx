@@ -22,6 +22,7 @@ export default function SummaryScreen() {
   const trips = useStrikeStore((state) => state.trips);
   const lastCompletedTripId = useStrikeStore((state) => state.lastCompletedTripId);
   const mapType = useStrikeStore((state) => state.mapType);
+  const backgroundGapSeconds = useStrikeStore((state) => state.backgroundGapSeconds);
   const trip = trips.find((item) => item.id === lastCompletedTripId) ?? trips[0];
 
   const [tripWeather, setTripWeather] = useState<WeatherSnapshot | null>(null);
@@ -145,7 +146,7 @@ export default function SummaryScreen() {
           <Text style={styles.tripTitle}>{trip.title}</Text>
           <Text style={styles.tripDate}>{dateStr}</Text>
         </View>
-        <Pressable style={styles.homeBtn} onPress={() => router.replace("/")}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("common.home")} style={styles.homeBtn} onPress={() => router.replace("/")}>
           <Ionicons name="home-outline" size={20} color={Colors.text} />
         </Pressable>
       </View>
@@ -166,6 +167,18 @@ export default function SummaryScreen() {
         <StatBlock value={String(contacts)} label={t("metrics.contacts")} />
         <StatBlock value={String(catches.length)} label={t("metrics.catches")} />
       </View>
+
+      {/* The distance above is only what was recorded on screen. Saying so here
+          is the difference between a number someone distrusts and a number they
+          understand. */}
+      {backgroundGapSeconds >= 60 ? (
+        <View style={styles.gapNotice}>
+          <Ionicons name="pause-circle-outline" size={16} color={Colors.textMuted} />
+          <Text style={styles.gapNoticeText}>
+            {t("summary.backgroundGap", { minutes: Math.round(backgroundGapSeconds / 60) })}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Personal best banner */}
       {isPB ? (
@@ -343,6 +356,23 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
+  gapNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.field,
+  },
+  gapNoticeText: {
+    flex: 1,
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+
   // ── PB banner ──
   pbBanner: {
     flexDirection: "row",

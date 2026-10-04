@@ -431,3 +431,32 @@ export async function getWeatherForEvent(
     waterLevelTrend: row.water_level_trend ?? undefined
   };
 }
+
+// --- Erasure ----------------------------------------------------------------
+
+/**
+ * Wipes every row the app has stored locally.
+ *
+ * Deliberately not "DROP TABLE": the schema and its migration version stay
+ * put, so the app keeps working afterwards instead of needing a restart.
+ *
+ * The caller must have already withdrawn the server-side observations — see
+ * eraseAllData() in the store. Once these rows are gone their local_event_ids
+ * are gone with them, and nothing can identify those rows on the server again.
+ */
+export async function eraseAllLocalData(db: SQLiteDatabase): Promise<void> {
+  // Every table the app owns. Enumerated rather than discovered, so adding a
+  // table forces a decision here instead of quietly surviving an erasure — a
+  // delete button that leaves data behind is worse than no delete button.
+  // Children first: events reference trips, snapshots reference events.
+  await db.execAsync(`
+    DELETE FROM weather_snapshots;
+    DELETE FROM events;
+    DELETE FROM trips;
+    DELETE FROM bite_map_delete_queue;
+    DELETE FROM feedback_queue;
+    DELETE FROM spots;
+    DELETE FROM lures;
+    DELETE FROM profile;
+  `);
+}

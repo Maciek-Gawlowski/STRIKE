@@ -1,4 +1,5 @@
 import { getDb } from "@/database/db";
+import { COUNTED_TRIPS_SQL, COUNTED_TRIPS_SQL_BARE } from "./tripRules";
 
 /**
  * Statistics service. Every metric is computed directly from SQLite (never from
@@ -37,7 +38,7 @@ const WATER_TEMP_RANGES = ["<8°C", "8-12°C", "12-16°C", ">16°C"] as const;
 
 // Trips longer than this are treated as abandoned/forgotten and excluded from
 // averages so a single runaway session doesn't distort catches/trip, km/contact, etc.
-const MAX_TRIP_DURATION_S = 12 * 3600;
+// Moved to services/tripRules.ts so the logbook can apply the same rule.
 
 /**
  * The set of trips every statistic counts.
@@ -50,10 +51,8 @@ const MAX_TRIP_DURATION_S = 12 * 3600;
  * COUNTED_TRIPS is for queries that join trips as `t`; COUNTED_TRIPS_BARE for
  * the ones that select from `trips` directly. Every query uses one of them.
  */
-const COUNTED_TRIPS =
-  `t.end_time IS NOT NULL AND (t.duration IS NULL OR t.duration <= ${MAX_TRIP_DURATION_S})`;
-const COUNTED_TRIPS_BARE =
-  `end_time IS NOT NULL AND (duration IS NULL OR duration <= ${MAX_TRIP_DURATION_S})`;
+const COUNTED_TRIPS = COUNTED_TRIPS_SQL;
+const COUNTED_TRIPS_BARE = COUNTED_TRIPS_SQL_BARE;
 
 function waterTempBucket(temp: number): string {
   if (temp < 8) {

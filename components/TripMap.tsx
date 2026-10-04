@@ -198,8 +198,12 @@ function TripMapInner({
 
       {displayedRoute.length <= 1 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>{t("trip.gpsWaiting")}</Text>
-          <Text style={styles.emptyText}>{t("trip.gpsWaitingHint")}</Text>
+          <Text style={styles.emptyTitle}>
+            {isActive ? t("trip.gpsWaiting") : t("trip.noRouteTitle")}
+          </Text>
+          <Text style={styles.emptyText}>
+            {isActive ? t("trip.gpsWaitingHint") : t("trip.noRouteBody")}
+          </Text>
         </View>
       ) : null}
     </View>

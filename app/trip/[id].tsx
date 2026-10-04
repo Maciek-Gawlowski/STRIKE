@@ -111,7 +111,7 @@ export default function TripReviewScreen() {
           <Pressable style={styles.iconBtn} onPress={() => router.push(`/share?tripId=${trip.id}` as never)}>
             <Ionicons name="share-outline" size={18} color={Colors.textMuted} />
           </Pressable>
-          <Pressable style={styles.iconBtn} onPress={handleDeleteTrip}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("trip.deleteBtn")} style={styles.iconBtn} onPress={handleDeleteTrip}>
             <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
           </Pressable>
         </View>

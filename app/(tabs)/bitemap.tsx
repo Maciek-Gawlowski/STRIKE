@@ -14,7 +14,6 @@ import { Fonts } from "@/theme/fonts";
 import { getDb } from "@/database/db";
 import { getBiteMapData, type BiteMapFilter, type HexActivity } from "@/services/biteMap";
 import { latLngToXY, type MapRegion } from "@/services/heatmapGeo";
-import { MOCK_BITE_MAP_ACTIVITY, MOCK_HEAT_POINTS } from "@/services/mockBiteMapHexes";
 import { deleteSpot, getSpots, upsertSpot, type Spot } from "@/database/spots";
 import { useTranslation } from "@/i18n";
 import { ALS_CENTER } from "@/services/zones";
@@ -45,12 +44,12 @@ const MAX_LAT_DELTA_FOR_OVERLAY = 4;
 const MIN_CELL_OBSERVATIONS = 3;
 const MIN_HOTSPOT_OBSERVATIONS = MIN_CELL_OBSERVATIONS + 1;
 
-type TimeMode = "24h" | "48h" | "7d" | "custom";
+type TimeMode = "24h" | "7d" | "30d" | "custom";
 type TimeTab = { val: TimeMode; labelKey: string };
 const TIME_TABS: TimeTab[] = [
   { val: "24h",    labelKey: "bitemap.toggle24" },
-  { val: "48h",    labelKey: "bitemap.toggle48" },
   { val: "7d",     labelKey: "bitemap.toggle7" },
+  { val: "30d",    labelKey: "bitemap.toggle30" },
   { val: "custom", labelKey: "bitemap.customRange" },
 ];
 
@@ -66,8 +65,8 @@ const SPECIES_PREF_KEY = "strike.biteMapSpecies";
 const EVENT_TYPES_PREF_KEY = "strike.biteMapEventTypes";
 
 function modeToSince(mode: TimeMode): string {
-  if (mode === "48h") return new Date(Date.now() - 48 * 3600000).toISOString();
   if (mode === "7d")  return new Date(Date.now() - 168 * 3600000).toISOString();
+  if (mode === "30d") return new Date(Date.now() - 720 * 3600000).toISOString();
   return new Date(Date.now() - 24 * 3600000).toISOString();
 }
 
@@ -87,7 +86,7 @@ function lerp(min: number, max: number, t: number): number {
 
 function subLabel(mode: TimeMode, t: (key: string) => string, customRange?: string): string {
   if (mode === "24h") return t("bitemap.sub24");
-  if (mode === "48h") return t("bitemap.sub48");
+  if (mode === "30d") return t("bitemap.sub30");
   if (mode === "custom" && customRange) return customRange;
   return t("bitemap.sub7");
 }
@@ -126,7 +125,7 @@ export default function BiteMapScreen() {
 
   const mapRef = useRef<MapView>(null);
 
-  const [timeMode, setTimeMode] = useState<TimeMode>("24h");
+  const [timeMode, setTimeMode] = useState<TimeMode>("30d");
   const [customOpen, setCustomOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -242,7 +241,7 @@ export default function BiteMapScreen() {
     if (liveRegion.latitudeDelta > MAX_LAT_DELTA_FOR_OVERLAY) return [];
     if (mapSize.width === 0 || mapSize.height === 0) return [];
 
-    const sizeScale = timeMode === "7d" ? 1.15 : 1;
+    const sizeScale = timeMode === "30d" ? 1.25 : timeMode === "7d" ? 1.15 : 1;
     const zoomScale = INITIAL_LAT_DELTA / liveRegion.latitudeDelta;
 
     return hexPositions
@@ -360,6 +359,8 @@ export default function BiteMapScreen() {
           ))}
         </GlassCard>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("bitemap.filterTitle")}
           style={[styles.filterBtn, hasActiveFilters && styles.filterBtnActive]}
           onPress={() => setFilterSheetOpen(true)}
         >

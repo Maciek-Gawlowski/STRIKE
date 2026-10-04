@@ -1,13 +1,35 @@
 import { Ionicons } from "@expo/vector-icons";
+import { isCountedTrip } from "@/services/tripRules";
 import { router } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
-import { TripMap } from "@/components/TripMap";
 import { formatDistance, formatDuration, useStrikeStore } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
+
+/**
+ * One metric in a trip row. Plain text on the card, no pill: four filled
+ * capsules per row turned a quiet list into a wall of buttons, and none of
+ * them were tappable.
+ */
+function Metric({
+  icon,
+  value,
+  highlight
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <View style={styles.stat}>
+      <Ionicons name={icon} size={13} color={highlight ? Colors.amber : Colors.textMuted} />
+      <Text style={[styles.statText, highlight && styles.statTextStrong]}>{value}</Text>
+    </View>
+  );
+}
 
 export default function LogbookScreen() {
   const { t } = useTranslation();
@@ -15,7 +37,11 @@ export default function LogbookScreen() {
 
   const groupedTrips = useMemo(() => {
     const groups = new Map<string, typeof trips>();
-    for (const trip of trips) {
+    // The same rule the statistics use. Before this, a trip somebody forgot to
+    // stop appeared here but was excluded from every number on the Statistics
+    // screen, so the two screens disagreed about the same month in front of
+    // the person who fished it.
+    for (const trip of trips.filter(isCountedTrip)) {
       const key = new Date(trip.startedAt).toLocaleDateString([], { year: "numeric", month: "long" });
       const existing = groups.get(key) ?? [];
       existing.push(trip);
@@ -26,10 +52,7 @@ export default function LogbookScreen() {
 
   return (
     <Screen>
-      <View>
-        <Text style={styles.kicker}>{t("logbook.kicker")}</Text>
-        <Text style={styles.title}>{t("logbook.title")}</Text>
-      </View>
+      <Text style={styles.title}>{t("logbook.title")}</Text>
 
       {trips.length === 0 ? (
         <View style={styles.emptyState}>
@@ -57,40 +80,29 @@ export default function LogbookScreen() {
               {monthTrips.map((trip) => {
                 const catches = trip.events.filter((event) => event.type === "catch").length;
                 const contacts = trip.events.filter((event) => event.type === "contact").length;
-                const tierColor = catches >= 3 ? Colors.amber : catches >= 1 ? Colors.borderStrong : Colors.border;
                 return (
                   <Pressable
                     key={trip.id}
-                    style={[styles.card, { borderLeftWidth: 3, borderLeftColor: tierColor }]}
+                    style={styles.card}
                     onPress={() => router.push(`/trip/${trip.id}`)}
                   >
-                    {trip.route.length > 1 ? (
-                      <TripMap route={trip.route} events={trip.events} height={90} interactive={false} />
-                    ) : null}
-                    <View style={[styles.cardTop, trip.route.length > 1 && styles.cardTopMap]}>
-                      <View>
-                        <Text style={styles.date}>{trip.title}</Text>
-                        <Text style={styles.place}>{new Date(trip.startedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</Text>
+                    {/* No map thumbnail here. Coastal sea-trout trips are walks
+                        along the same few hundred metres of shoreline, so at 90 px
+                        every card drew the same grey squiggle and the list looked
+                        like a rendering bug. The route is on the trip screen,
+                        where it is big enough to mean something. */}
+                    <View style={styles.cardTop}>
+                      <View style={styles.cardTitleWrap}>
+                        <Text style={styles.date} numberOfLines={2}>{trip.title}</Text>
+                        <Text style={styles.place}>{new Date(trip.startedAt).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                     </View>
                     <View style={styles.stats}>
-                      <View style={styles.stat}>
-                        <Ionicons name="time-outline" size={13} color={Colors.text} />
-                        <Text style={styles.statText}>{formatDuration(trip.startedAt, trip.endedAt)}</Text>
-                      </View>
-                      <View style={styles.stat}>
-                        <Ionicons name="footsteps-outline" size={13} color={Colors.text} />
-                        <Text style={styles.statText}>{formatDistance(trip.distanceMeters)}</Text>
-                      </View>
-                      <View style={styles.stat}>
-                        <Ionicons name="fish-outline" size={13} color={Colors.text} />
-                        <Text style={styles.statText}>{t("logbook.catchesCount", { count: catches })}</Text>
-                      </View>
-                      <View style={styles.stat}>
-                        <Ionicons name="flash-outline" size={13} color={Colors.text} />
-                        <Text style={styles.statText}>{t("logbook.contactsCount", { count: contacts })}</Text>
-                      </View>
+                      <Metric icon="time-outline" value={formatDuration(trip.startedAt, trip.endedAt)} />
+                      <Metric icon="footsteps-outline" value={formatDistance(trip.distanceMeters)} />
+                      <Metric icon="fish-outline" value={String(catches)} highlight={catches > 0} />
+                      <Metric icon="flash-outline" value={String(contacts)} />
                     </View>
                   </Pressable>
                 );
@@ -122,15 +134,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyBold,
     letterSpacing: 0
   },
-  kicker: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Fonts.bodySemibold,
-    letterSpacing: 0
-  },
   title: {
     color: Colors.textBright,
-    fontSize: 35,
+    fontSize: 34,
     fontFamily: Fonts.heading,
     letterSpacing: 0
   },
@@ -143,7 +149,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: Colors.textBright,
     fontFamily: Fonts.heading,
-    fontSize: 22,
+    fontSize: 20,
     letterSpacing: 0,
     textAlign: "center"
   },
@@ -183,13 +189,13 @@ const styles = StyleSheet.create({
   monthLabel: {
     color: Colors.textBright,
     fontFamily: Fonts.heading,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0,
   },
   monthCatchCount: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0,
   },
   card: {
@@ -198,51 +204,51 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
-    gap: 0,
+    marginBottom: 10,
   },
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 17,
+    gap: 12,
+    paddingHorizontal: 16,
     paddingTop: 14,
   },
-  cardTopMap: {
-    paddingTop: 12,
+  cardTitleWrap: {
+    flex: 1,
   },
   date: {
     color: Colors.textBright,
-    fontSize: 19,
+    fontSize: 17,
     fontFamily: Fonts.heading,
     letterSpacing: 0
   },
   place: {
     color: Colors.textMuted,
     marginTop: 2,
+    fontSize: 13,
     fontFamily: Fonts.body
   },
   stats: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingHorizontal: 17,
+    alignItems: "center",
+    gap: 18,
+    paddingHorizontal: 16,
     paddingBottom: 14,
-    paddingTop: 10,
+    paddingTop: 12,
   },
   stat: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    overflow: "hidden",
-    backgroundColor: Colors.pill,
+    gap: 5,
   },
   statText: {
-    color: Colors.text,
-    fontSize: 12,
+    color: Colors.textMuted,
+    fontSize: 13,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 0,
+  },
+  statTextStrong: {
+    color: Colors.textBright,
   }
 });

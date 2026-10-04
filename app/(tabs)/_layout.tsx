@@ -28,7 +28,12 @@ function TabLabel({ label, color }: { label: string; color: string }) {
       numberOfLines={1}
       adjustsFontSizeToFit
       minimumFontScale={0.85}
-      allowFontScaling={false}
+      // Dynamic Type was switched off here entirely to stop long labels
+      // truncating. That fixed the layout by ignoring an accessibility setting
+      // — on a fishing app, whose users skew older, that is the wrong trade.
+      // The label scales, up to the point where it stops fitting its fifth of
+      // the bar, and adjustsFontSizeToFit handles the rest.
+      maxFontSizeMultiplier={1.3}
       style={{
         width: "100%",
         textAlign: "center",
@@ -51,8 +56,11 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
+          // Same colour as the page, separated by a hairline rather than by a
+          // panel. Colors.border is now too faint to define an edge this
+          // important, so the bar uses the stronger of the two.
           backgroundColor: Colors.navy,
-          borderTopColor: Colors.border,
+          borderTopColor: Colors.borderStrong,
           borderTopWidth: 1,
           height: 62,
           paddingBottom: 10,

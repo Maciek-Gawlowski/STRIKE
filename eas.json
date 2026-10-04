@@ -14,6 +14,7 @@
     },
     "preview": {
       "distribution": "store",
+      "environment": "preview",
       "credentialsSource": "local",
       "autoIncrement": true,
       "ios": {

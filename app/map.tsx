@@ -169,30 +169,30 @@ export default function MapScreen() {
         ))}
       </View>
 
+      {/* Two explicit rows. As a single wrapping row, MetricCard's minWidth of
+          30% fits three tiles and strands the fourth across the full width,
+          which reads as a layout bug rather than a choice. */}
       <View style={styles.metrics}>
-        <MetricCard label={t("metrics.time")} value={formatDuration(activeTrip.startedAt, new Date(now).toISOString())} />
-        <MetricCard label={t("metrics.distance")} value={formatDistance(activeTrip.distanceMeters)} />
-        <MetricCard label={t("metrics.contacts")} value={contacts} />
-        <MetricCard label={t("metrics.catches")} value={catches} />
+        <View style={styles.metricsRow}>
+          <MetricCard label={t("metrics.time")} value={formatDuration(activeTrip.startedAt, new Date(now).toISOString())} />
+          <MetricCard label={t("metrics.distance")} value={formatDistance(activeTrip.distanceMeters)} />
+        </View>
+        <View style={styles.metricsRow}>
+          <MetricCard label={t("metrics.contacts")} value={contacts} />
+          <MetricCard label={t("metrics.catches")} value={catches} />
+        </View>
       </View>
 
+      {/* The same four buttons as Home, from the same component. These were
+          hand-rolled Pressables with no numberOfLines, which is why "Following"
+          broke across two lines mid-word here but fitted on Home. Two
+          implementations of one control also meant two sets of colours for the
+          same four actions. */}
       <View style={styles.eventGrid}>
-        <Pressable style={[styles.eventBtn, styles.eventContact]} onPress={() => handleEvent("contact")}>
-          <Ionicons name="flash-outline" size={22} color={Colors.textOnAmber} />
-          <Text style={[styles.eventBtnText, { color: Colors.textOnAmber }]}>{t("actions.contact")}</Text>
-        </Pressable>
-        <Pressable style={[styles.eventBtn, styles.eventFollowing]} onPress={() => handleEvent("following")}>
-          <Ionicons name="eye-outline" size={22} color={Colors.textBright} />
-          <Text style={[styles.eventBtnText, { color: Colors.textBright }]}>{t("actions.following")}</Text>
-        </Pressable>
-        <Pressable style={[styles.eventBtn, styles.eventCatch]} onPress={() => void handleCatch()}>
-          <Ionicons name="fish-outline" size={22} color={Colors.catchText} />
-          <Text style={[styles.eventBtnText, { color: Colors.catchText }]}>{t("actions.newCatch")}</Text>
-        </Pressable>
-        <Pressable style={[styles.eventBtn, styles.eventPhoto]} onPress={handlePhoto}>
-          <Ionicons name="camera-outline" size={22} color={Colors.textBright} />
-          <Text style={[styles.eventBtnText, { color: Colors.textBright }]}>{t("actions.photo")}</Text>
-        </Pressable>
+        <ActionButton compact label={t("actions.contact")} icon="flash-outline" tone="yellow" onPress={() => handleEvent("contact")} />
+        <ActionButton compact label={t("actions.following")} icon="eye-outline" tone="blue" onPress={() => handleEvent("following")} />
+        <ActionButton compact label={t("actions.newCatch")} icon="fish-outline" tone="catch" onPress={() => void handleCatch()} />
+        <ActionButton compact label={t("actions.photo")} icon="camera-outline" tone="steel" onPress={handlePhoto} />
       </View>
 
       <Pressable style={styles.stopButton} onPress={handleStop}>
@@ -271,13 +271,13 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 0
   },
   title: {
     color: Colors.textBright,
-    fontSize: 32,
+    fontSize: 34,
     fontFamily: Fonts.heading,
     letterSpacing: 0,
     lineHeight: 36
@@ -307,15 +307,17 @@ const styles = StyleSheet.create({
   mapTypeText: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0
   },
   mapTypeTextActive: {
     color: Colors.textOnAmber
   },
   metrics: {
+    gap: 9
+  },
+  metricsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 9
   },
   actions: {
@@ -325,30 +327,6 @@ const styles = StyleSheet.create({
   eventGrid: {
     flexDirection: "row",
     gap: 10
-  },
-  eventBtn: {
-    flex: 1,
-    minHeight: 96,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 12
-  },
-  eventContact: {
-    backgroundColor: Colors.amber
-  },
-  eventFollowing: {
-    backgroundColor: "#2F6F93"
-  },
-  eventCatch: {
-    backgroundColor: Colors.catchGreen,
-  },
-  eventPhoto: {
-    backgroundColor: "#2a3a4a",
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   celebOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -361,13 +339,8 @@ const styles = StyleSheet.create({
   celebText: {
     color: Colors.catchText,
     fontFamily: Fonts.black,
-    fontSize: 36,
+    fontSize: 34,
     letterSpacing: 0,
-  },
-  eventBtnText: {
-    fontFamily: Fonts.heading,
-    fontSize: 14,
-    textAlign: "center"
   },
   stopButton: {
     height: 64,
@@ -383,7 +356,7 @@ const styles = StyleSheet.create({
   stopText: {
     color: Colors.dangerText,
     fontFamily: Fonts.heading,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0
   },
   empty: {
@@ -438,7 +411,7 @@ const styles = StyleSheet.create({
   lureOptionText: {
     color: Colors.textBright,
     fontFamily: Fonts.bodyBold,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0
   }
 });

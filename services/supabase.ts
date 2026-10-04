@@ -11,31 +11,71 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * caller degrades gracefully (the app still runs fully offline).
  */
 
-// --- Database typings (only the bite_map_events table is used) --------------
+// --- Database typings -------------------------------------------------------
+//
+// These describe the schema as it ACTUALLY is. They previously described a
+// zone_id model the app had already abandoned, and because nothing checked
+// them against the database, TypeScript happily compiled an insert of a
+// column that did not exist. Every upload was rejected for weeks and the
+// Activity Map stayed empty while the app looked healthy.
+//
+// If you change the schema, change this file in the same commit. It is the
+// only thing that will tell you at compile time instead of at audit time.
 
 export type BiteMapEventRow = {
   id: string;
   created_at: string;
-  zone_id: number;
+  /** Legacy zone model, nullable and unused. Nothing writes it. */
+  zone_id: number | null;
+  /** Hex cell, ~461 m circumradius. The only position ever stored. */
+  h3_cell: string | null;
   event_type: string;
-  hour_of_day: number;
-  date: string;
+  hour_of_day: number | null;
+  date: string | null;
   wind_direction: string | null;
   water_temp: number | null;
-  // Only populated for 'exact' contributions; null for zone-only.
-  lat: number | null;
-  lng: number | null;
+  species: string | null;
+  /** Random per-event id. The only way a device can withdraw its own row. */
+  local_event_id: string | null;
 };
 
 export type BiteMapEventInsert = {
-  zone_id: number;
+  h3_cell: string;
+  local_event_id: string;
   event_type: string;
   hour_of_day: number;
   date: string;
+  species?: string | null;
   wind_direction?: string | null;
   water_temp?: number | null;
-  lat?: number | null;
-  lng?: number | null;
+};
+
+export type FeedbackRow = {
+  id: string;
+  created_at: string;
+  message: string;
+  app_version: string | null;
+  build_number: string | null;
+  platform: string | null;
+  device_model: string | null;
+  local_user_id: string | null;
+};
+
+export type FeedbackInsert = {
+  message: string;
+  app_version?: string | null;
+  build_number?: string | null;
+  platform?: string | null;
+  device_model?: string | null;
+  local_user_id?: string | null;
+};
+
+/** Aggregated cell returned by bite_map_cells(). Below-threshold cells never appear. */
+export type BiteMapCell = {
+  h3_cell: string;
+  catches: number;
+  contacts: number;
+  total: number;
 };
 
 export type Database = {
@@ -47,9 +87,32 @@ export type Database = {
         Update: Partial<BiteMapEventInsert>;
         Relationships: [];
       };
+      feedback: {
+        Row: FeedbackRow;
+        Insert: FeedbackInsert;
+        Update: Partial<FeedbackInsert>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      // Reads and deletes go through these rather than the table: anon holds
+      // INSERT and nothing else. bite_map_cells applies the 3-observation
+      // threshold in SQL, where a caller cannot remove it.
+      bite_map_cells: {
+        Args: {
+          p_since: string;
+          p_until?: string | null;
+          p_species?: string | null;
+          p_event_types?: string[] | null;
+        };
+        Returns: BiteMapCell[];
+      };
+      delete_bite_map_events: {
+        Args: { p_ids: string[] };
+        Returns: number;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 0
   },
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   subtle: {
     color: Colors.textMuted,
     marginTop: 5,
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
     fontFamily: Fonts.body
   },
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   weatherPillText: {
     color: Colors.text,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0
   },
   photoBox: {
@@ -443,13 +443,13 @@ const styles = StyleSheet.create({
   photoText: {
     color: Colors.text,
     fontFamily: Fonts.heading,
-    fontSize: 18,
+    fontSize: 17,
     letterSpacing: 0
   },
   photoOptional: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0
   },
   form: {
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: Colors.text,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Fonts.bodySemibold,
     textTransform: "uppercase",
     marginTop: 6,
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   selectText: {
     color: Colors.textBright,
     fontFamily: Fonts.bodyBold,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0
   },
   input: {
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
     color: Colors.textBright,
     textAlignVertical: "top",
     backgroundColor: Colors.field,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: Fonts.body
   },
   measureRow: {
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
   optionText: {
     color: Colors.textBright,
     fontFamily: Fonts.bodyBold,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0
   },
   empty: {
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
   celebSpecies: {
     color: Colors.catchText,
     fontFamily: Fonts.black,
-    fontSize: 36,
+    fontSize: 34,
     letterSpacing: 0,
   },
 });

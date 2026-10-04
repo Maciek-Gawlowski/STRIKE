@@ -4,6 +4,25 @@ import { supabase } from "./supabase";
 import { degreesToCompass, type WeatherData } from "./weather";
 import type { SQLiteDatabase } from "expo-sqlite";
 import { getBiteMapDeleteQueue, clearBiteMapDeleteQueue, type WeatherSnapshot } from "@/database/queries";
+import { recordSyncFailure, recordSyncSuccess } from "./syncStatus";
+
+/**
+ * Logs a Bite Map failure without ever throwing.
+ *
+ * Offline is expected and uninteresting, so a plain network failure is kept
+ * quiet. Anything else — a rejected column, an RLS refusal, a missing RPC —
+ * is a bug on our side and gets printed with its message, because the only
+ * reason those went unnoticed before is that nothing ever printed them.
+ */
+function warnUpload(stage: string, error: unknown, kind: "read" | "write" = "write"): void {
+  const message =
+    error instanceof Error ? error.message : typeof error === "string" ? error : JSON.stringify(error);
+  if (/network|fetch|timeout|offline/i.test(message ?? "")) return;
+  console.warn(`[strike/biteMap] ${stage} failed: ${message}`);
+  // Also put it somewhere a person holding the phone can read it. A console
+  // warning in a TestFlight build reaches nobody.
+  recordSyncFailure(stage, error, kind);
+}
 
 /**
  * Bite Map backend access.
@@ -18,13 +37,14 @@ import { getBiteMapDeleteQueue, clearBiteMapDeleteQueue, type WeatherSnapshot } 
  *   ALTER TABLE bite_map_events DROP COLUMN zone_id;
  *   CREATE INDEX ON bite_map_events (h3_cell, created_at);
  *
- * Server-side aggregation RPC (optional, replaces the client-side loop):
- *   SELECT h3_cell, event_type, COUNT(*) AS n
- *   FROM bite_map_events
- *   WHERE created_at >= $since AND h3_cell IS NOT NULL
- *   GROUP BY h3_cell, event_type;
- *
- * Until the RPC exists, aggregation runs client-side on the raw rows.
+ * Reads and deletes both go through SECURITY DEFINER functions rather than the
+ * table. The anon key is embedded in the IPA and can be lifted out of it in a
+ * minute, so anything the table allows the anon role to do, a stranger can do:
+ * a SELECT policy means every individual observation is readable, and a DELETE
+ * policy of USING (true) means one unfiltered statement empties the shared map.
+ * bite_map_cells() applies the 3-observation threshold in SQL, where a caller
+ * cannot drop the HAVING clause, and delete_bite_map_events() can only remove
+ * ids the caller already knows. See 12-supabase-lockdown.sql.
  */
 
 export type HexActivity = {
@@ -68,8 +88,14 @@ export async function uploadBiteMapEvent(
       wind_direction: weather ? degreesToCompass(weather.windDirection) : null,
       water_temp: weather?.waterTemp ?? null,
     });
-  } catch {
-    // Offline / network / RLS error — Bite Map is best-effort, never throw.
+    recordSyncSuccess("write");
+  } catch (error) {
+    // Never throw: an upload failing must not break a trip in progress.
+    // But it must not be invisible either. A silent catch here hid a schema
+    // mismatch for weeks — the table had zone_id NOT NULL and no h3_cell, so
+    // every insert was rejected and the Activity Map stayed empty while the
+    // app looked like it was working.
+    warnUpload("upload", error);
   }
 }
 
@@ -79,11 +105,16 @@ export async function uploadBiteMapEvent(
  */
 export async function deleteBiteMapEvents(eventIds: string[]): Promise<void> {
   if (!supabase || eventIds.length === 0) return;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase.from("bite_map_events") as any)
-    .delete()
-    .in("local_event_id", eventIds);
-  if (error) throw error;
+  // The function caps the array at 500; a single trip is nowhere near that,
+  // but chunk anyway so a bulk delete of old trips cannot trip the limit.
+  for (let i = 0; i < eventIds.length; i += 400) {
+    const chunk = eventIds.slice(i, i + 400);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("delete_bite_map_events", {
+      p_ids: chunk
+    });
+    if (error) throw error;
+  }
 }
 
 /**
@@ -96,7 +127,8 @@ export async function flushBiteMapDeleteQueue(db: SQLiteDatabase): Promise<void>
     if (ids.length === 0) return;
     await deleteBiteMapEvents(ids);
     await clearBiteMapDeleteQueue(db, ids);
-  } catch {
+  } catch (error) {
+    warnUpload("delete-queue-flush", error);
     // Still offline — leave queued for the next app start.
   }
 }
@@ -114,8 +146,11 @@ export async function resyncBiteMapEvent(
   if (!supabase) return;
   try {
     await deleteBiteMapEvents([event.id]);
-  } catch {
-    // offline — proceed to re-insert anyway (may create a duplicate, acceptable)
+  } catch (error) {
+    // Offline — re-insert anyway. The unique index on local_event_id makes
+    // that safe: a duplicate is rejected rather than silently doubling the
+    // event's weight on the shared map.
+    warnUpload("resync-delete", error);
   }
   try {
     const timestamp = new Date(event.timestamp);
@@ -131,8 +166,8 @@ export async function resyncBiteMapEvent(
       wind_direction: !isNaN(windDegrees) ? degreesToCompass(windDegrees) : null,
       water_temp: weather?.waterTemp ?? null,
     });
-  } catch {
-    // best-effort
+  } catch (error) {
+    warnUpload("resync-insert", error);
   }
 }
 
@@ -144,44 +179,45 @@ export async function resyncBiteMapEvent(
 export async function getBiteMapData(filter: BiteMapFilter): Promise<HexActivity[]> {
   try {
     if (!supabase) return [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase.from("bite_map_events") as any)
-      .select("h3_cell,event_type,species")
-      .gte("created_at", filter.since)
-      .not("h3_cell", "is", null);
-    if (filter.until) {
-      query = query.lte("created_at", filter.until);
-    }
 
-    const { data, error } = await query as {
-      data: Array<{ h3_cell: string | null; event_type: string; species: string | null }> | null;
+    // Filtering and aggregation both happen in SQL now. Two things follow:
+    // the raw observations never leave the database, and a busy window costs
+    // one row per cell instead of one row per event — which matters on a phone
+    // holding a bar of signal on a beach.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc("bite_map_cells", {
+      p_since: filter.since,
+      p_until: filter.until ?? null,
+      p_species: filter.species ?? null,
+      p_event_types:
+        filter.eventTypes && filter.eventTypes.length > 0 ? filter.eventTypes : null
+    }) as {
+      data: Array<{ h3_cell: string; catches: number; contacts: number; total: number }> | null;
       error: unknown;
     };
 
-    if (error || !data || data.length === 0) return [];
-
-    // Client-side filter + aggregation.
-    const cellMap = new Map<string, { catches: number; contacts: number; total: number }>();
-    for (const row of data) {
-      if (!row.h3_cell) continue;
-      // Species filter: if set, only include catch rows matching that species
-      if (filter.species && row.event_type === "catch" && row.species !== filter.species) continue;
-      // If species filter is set, skip non-catch event types (no species to match on)
-      if (filter.species && row.event_type !== "catch") continue;
-      // Event type filter: if set, skip rows not in the list
-      if (filter.eventTypes && filter.eventTypes.length > 0 && !filter.eventTypes.includes(row.event_type)) continue;
-      const entry = cellMap.get(row.h3_cell) ?? { catches: 0, contacts: 0, total: 0 };
-      if (row.event_type === "catch") entry.catches += 1;
-      else if (row.event_type === "contact") entry.contacts += 1;
-      entry.total += 1;
-      cellMap.set(row.h3_cell, entry);
+    if (error) {
+      warnUpload("read", error, "read");
+      return [];
     }
+    // A read proves reads work. It says nothing about whether anything has
+    // ever been uploaded, which is why this does not turn the light green.
+    recordSyncSuccess("read");
+    if (!data || data.length === 0) return [];
 
-    return Array.from(cellMap.entries()).map(([cell, counts]) => {
-      const { lat, lng } = cellToLatLng(cell);
-      return { h3_cell: cell, lat, lng, ...counts };
+    return data.map((row) => {
+      const { lat, lng } = cellToLatLng(row.h3_cell);
+      return {
+        h3_cell: row.h3_cell,
+        lat,
+        lng,
+        catches: row.catches,
+        contacts: row.contacts,
+        total: row.total
+      };
     });
-  } catch {
+  } catch (error) {
+    warnUpload("read", error, "read");
     return [];
   }
 }

@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   backText: {
     color: Colors.textBright,
     fontFamily: Fonts.bodyBold,
-    fontSize: 14,
+    fontSize: 13,
     letterSpacing: 0
   },
   editBtn: {
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   editBtnText: {
     color: Colors.textOnAmber,
     fontFamily: Fonts.bodyBold,
-    fontSize: 14,
+    fontSize: 13,
     letterSpacing: 0,
   },
   editBtnSecondary: {
@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
   editBtnSecondaryText: {
     color: Colors.text,
     fontFamily: Fonts.bodyBold,
-    fontSize: 14,
+    fontSize: 13,
     letterSpacing: 0,
   },
   heroFooter: {
@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
   },
   heroSpecies: {
     color: Colors.textBright,
-    fontSize: 30,
+    fontSize: 26,
     fontFamily: Fonts.heading,
     letterSpacing: 0
   },
@@ -845,7 +845,7 @@ const styles = StyleSheet.create({
   detailLabel: {
     flex: 1,
     color: Colors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: Fonts.body,
     letterSpacing: 0
   },
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
   },
   detailValue: {
     color: Colors.textBright,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: Fonts.bodyBold,
     textAlign: "right",
     letterSpacing: 0,
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
   keptBtnText: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodyBold,
-    fontSize: 14,
+    fontSize: 13,
     letterSpacing: 0,
   },
   keptBtnTextActive: {
@@ -981,7 +981,7 @@ const styles = StyleSheet.create({
   saveBtnLargeText: {
     color: Colors.textOnAmber,
     fontFamily: Fonts.heading,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0,
   },
 
@@ -1002,7 +1002,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     color: Colors.textBright,
     fontFamily: Fonts.heading,
-    fontSize: 18,
+    fontSize: 17,
     letterSpacing: 0,
     marginBottom: 8,
   },
@@ -1049,7 +1049,7 @@ const styles = StyleSheet.create({
   notFound: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 16,
+    fontSize: 15,
     paddingTop: 40,
     textAlign: "center"
   },
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
   attachCatchNone: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0,
     fontStyle: "italic",
   },

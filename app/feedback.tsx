@@ -1,22 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
+import { appBuild, appVersion } from "@/services/appInfo";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { getDb } from "@/database/db";
 import { queueFeedback } from "@/database/queries";
-import { getOrCreateLocalUserId } from "@/database/preferences";
+import { clearLastCrash, getLastCrash, getOrCreateLocalUserId } from "@/database/preferences";
 import { sendFeedback } from "@/services/feedback";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
 
-const appVersion = Constants.expoConfig?.version ?? "?";
-const buildNumber =
-  (Constants.expoConfig?.ios?.buildNumber ??
-    String(Constants.expoConfig?.android?.versionCode ?? "")) ||
-  "?";
 const deviceModel =
   (Platform.constants as Record<string, unknown>)?.Model as string | undefined ??
   Platform.OS;
@@ -27,8 +22,20 @@ const uid = () =>
 export default function FeedbackScreen() {
   const { t } = useTranslation();
   const [message, setMessage] = useState("");
+  // A crash the app caught but nobody could report. Offered, not attached
+  // silently — it is their message, and it carries a stack trace.
+  const [lastCrash, setLastCrash] = useState<{ at: string; message: string } | null>(null);
+  const [attachCrash, setAttachCrash] = useState(true);
+  useEffect(() => {
+    void getLastCrash().then(setLastCrash);
+  }, []);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
+  // Queued means it is on the phone waiting for signal, not with us. Telling
+  // someone standing on a beach with no bars that their message "went straight
+  // to the team" is a small lie that costs real feedback: they close the app
+  // believing it was delivered.
+  const [queued, setQueued] = useState(false);
 
   async function handleSend() {
     const trimmed = message.trim();
@@ -38,9 +45,12 @@ export default function FeedbackScreen() {
     const localUserId = await getOrCreateLocalUserId();
     const row = {
       id: uid(),
-      message: trimmed,
+      message:
+        lastCrash && attachCrash
+          ? `${trimmed}\n\n--- last crash (${lastCrash.at}) ---\n${lastCrash.message}`
+          : trimmed,
       appVersion,
-      buildNumber,
+      buildNumber: appBuild,
       platform: Platform.OS,
       deviceModel,
       localUserId
@@ -48,8 +58,12 @@ export default function FeedbackScreen() {
 
     try {
       await sendFeedback(row);
-    } catch {
+    } catch (error) {
+      console.warn(
+        `[strike/feedback] send failed: ${error instanceof Error ? error.message : String(error)}`
+      );
       // Offline — queue for retry on next launch.
+      setQueued(true);
       try {
         const db = await getDb();
         await queueFeedback(db, row);
@@ -58,6 +72,9 @@ export default function FeedbackScreen() {
       }
     }
 
+    if (lastCrash && attachCrash) {
+      void clearLastCrash();
+    }
     setSending(false);
     setDone(true);
   }
@@ -70,9 +87,15 @@ export default function FeedbackScreen() {
           <Text style={styles.backText}>{t("common.back")}</Text>
         </Pressable>
         <View style={styles.thankYou}>
-          <Ionicons name="checkmark-circle" size={56} color={Colors.amber} />
+          <Ionicons
+            name={queued ? "cloud-offline-outline" : "checkmark-circle"}
+            size={56}
+            color={queued ? Colors.textMuted : Colors.amber}
+          />
           <Text style={styles.thankYouTitle}>{t("feedback.thankYouTitle")}</Text>
-          <Text style={styles.thankYouBody}>{t("feedback.thankYouBody")}</Text>
+          <Text style={styles.thankYouBody}>
+            {t(queued ? "feedback.queuedBody" : "feedback.thankYouBody")}
+          </Text>
           <Pressable style={styles.doneBtn} onPress={() => router.back()}>
             <Text style={styles.doneBtnText}>{t("feedback.done")}</Text>
           </Pressable>
@@ -104,9 +127,20 @@ export default function FeedbackScreen() {
         autoFocus
       />
 
+      {lastCrash ? (
+        <Pressable style={styles.crashRow} onPress={() => setAttachCrash((v) => !v)}>
+          <Ionicons
+            name={attachCrash ? "checkbox-outline" : "square-outline"}
+            size={20}
+            color={attachCrash ? Colors.amber : Colors.textMuted}
+          />
+          <Text style={styles.crashText}>{t("feedback.attachCrash")}</Text>
+        </Pressable>
+      ) : null}
+
       <View style={styles.meta}>
         <Text style={styles.metaText}>
-          {appVersion} ({buildNumber}) · {Platform.OS} · {deviceModel}
+          {appVersion} ({appBuild}) · {Platform.OS} · {deviceModel}
         </Text>
       </View>
 
@@ -166,6 +200,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 0,
     lineHeight: 24
+  },
+  crashRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 4
+  },
+  crashText: {
+    flex: 1,
+    color: Colors.text,
+    fontFamily: Fonts.body,
+    fontSize: 13
   },
   meta: {
     alignItems: "center"

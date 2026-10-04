@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { MAX_TRIP_DURATION_S } from "@/services/tripRules";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
@@ -313,8 +314,7 @@ function TimeOfDayRing({ hourCounts, t }: { hourCounts: number[]; t: (k: string)
 type MonthBucket = { key: string; label: string; catches: number; contacts: number; following: number };
 type SpeciesBucket = { species: string; count: number };
 
-/** Mirrors MAX_TRIP_DURATION_S in services/statistics.ts — keep the two equal. */
-const MAX_TRIP_DURATION_S = 12 * 3600;
+
 
 const N_MONTHS = 6;
 const MBAR_W = 288, MBAR_H = 130;
@@ -336,14 +336,18 @@ function StackedMonthlyChart({ data }: { data: MonthBucket[] }) {
 
   return (
     <Svg width={MBAR_W} height={MBAR_H} viewBox={`0 0 ${MBAR_W} ${MBAR_H}`}>
+      {/* One hairline the bars stand on. */}
+      <Rect
+        x={0}
+        y={MBAR_H - MBAR_BOTTOM}
+        width={MBAR_W}
+        height={1}
+        fill="rgba(217,218,213,0.10)"
+      />
       {data.map((bucket, i) => {
         const total = bucket.catches + bucket.contacts + bucket.following;
         const x = i * (MBAR_BAR + MBAR_GAP);
         const totalH = total > 0 ? Math.max((total / maxTotal) * MBAR_USABLE, 4) : 0;
-
-        // Background slot
-        const bgY = MBAR_TOP;
-        const bgH = MBAR_USABLE;
 
         // Segment heights (bottom-up: following, contacts, catches)
         const segments: { key: keyof typeof SEG_COLORS; h: number }[] = [];
@@ -374,10 +378,11 @@ function StackedMonthlyChart({ data }: { data: MonthBucket[] }) {
 
         return (
           <G key={bucket.key}>
-            {/* background slot */}
-            <Rect x={x} y={bgY} width={MBAR_BAR} height={bgH}
-              fill="rgba(217,218,213,0.05)" rx={5} />
-            {/* stacked segments with rounded top on the topmost */}
+            {/* A month with no fishing in it draws nothing but its label. The
+                chart used to paint a full-height empty slot behind every bar,
+                so an angler with three good months and three quiet ones saw
+                three tall grey boxes and read them as a bug. Scale comes from
+                the baseline below, not from a box per column. */}
             {segEls}
             {/* total label above bar */}
             {total > 0 && (
@@ -468,6 +473,30 @@ function StatTileHero({
         {value}
       </Text>
       <Text style={styles.heroLabel} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
+// ── Condition column ──────────────────────────────────────────────────────────
+
+/** One of the three conditions on the summary card: icon, label, value, unit. */
+function CondColumn({
+  icon, color, label, value, sub,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <View style={styles.condColumn}>
+      <Ionicons name={icon} size={20} color={color} />
+      <Text style={styles.condColumnLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.condColumnValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {value}
+      </Text>
+      {sub ? <Text style={styles.condColumnSub} numberOfLines={1}>{sub}</Text> : null}
     </View>
   );
 }
@@ -594,10 +623,7 @@ export default function StatsScreen() {
   if (loading) {
     return (
       <Screen refreshControl={refreshControl}>
-        <View style={styles.titleBlock}>
-          <Text style={styles.kicker}>{t("stats.kicker")}</Text>
-          <Text style={styles.title}>{t("stats.title")}</Text>
-        </View>
+        <Text style={styles.title}>{t("stats.title")}</Text>
         <Text style={styles.subtle}>{t("stats.loading")}</Text>
       </Screen>
     );
@@ -606,10 +632,7 @@ export default function StatsScreen() {
   if (!stats) {
     return (
       <Screen refreshControl={refreshControl}>
-        <View style={styles.titleBlock}>
-          <Text style={styles.kicker}>{t("stats.kicker")}</Text>
-          <Text style={styles.title}>{t("stats.title")}</Text>
-        </View>
+        <Text style={styles.title}>{t("stats.title")}</Text>
         <GlassCard style={styles.emptyCard}>
           <Ionicons name="bar-chart-outline" size={36} color={Colors.textMuted} />
           <Text style={styles.emptyText}>{t("stats.empty")}</Text>
@@ -632,17 +655,59 @@ export default function StatsScreen() {
 
   return (
     <Screen refreshControl={refreshControl}>
-      <View style={styles.titleBlock}>
-        <Text style={styles.kicker}>{t("stats.kicker")}</Text>
-        <Text style={styles.title}>{t("stats.title")}</Text>
-      </View>
+      <Text style={styles.title}>{t("stats.title")}</Text>
 
-      {/* a) Overview — 3 hero tiles (tiles are flex:1, so they widen to fill the row) */}
-      <View style={styles.heroGrid}>
-        <StatTileHero icon="eye-outline"   value={stats.totalFollowing} label={t("stats.following")} color={SEG_COLORS.following} />
-        <StatTileHero icon="flash-outline" value={stats.totalContacts}  label={t("stats.tileHug")}   color={SEG_COLORS.contacts} />
-        <StatTileHero icon="fish-outline"  value={stats.totalCatches}   label={t("metrics.catches")} color={SEG_COLORS.catches} />
-      </View>
+      {/* a) Observations — one card, three columns. Three separate tiles read as
+             three unrelated facts; they are one fact with three parts. */}
+      <GlassCard style={styles.summaryCard}>
+        <Text style={styles.cardLabel}>{t("stats.myObservations")}</Text>
+        <View style={styles.summaryRow}>
+          <StatTileHero icon="eye-outline"   value={stats.totalFollowing} label={t("stats.following")} color={SEG_COLORS.following} />
+          <View style={styles.summaryDivider} />
+          <StatTileHero icon="flash-outline" value={stats.totalContacts}  label={t("stats.tileHug")}   color={SEG_COLORS.contacts} />
+          <View style={styles.summaryDivider} />
+          <StatTileHero icon="fish-outline"  value={stats.totalCatches}   label={t("metrics.catches")} color={SEG_COLORS.catches} />
+        </View>
+      </GlassCard>
+
+      {/* b) The conditions those catches happened in. This used to sit eight
+             sections down, below every chart, which is the wrong end of the
+             screen for the thing people actually come here to check.
+
+             The label says "catches", not "observations": the underlying
+             calculation counts catches only. Widening it to all observations
+             is a change in services/statistics.ts, not a change of heading. */}
+      <GlassCard style={styles.summaryCard}>
+        <Text style={styles.cardLabel}>{t("stats.bestConditionsTitle")}</Text>
+        {bestCond && (bestCond.waterTempRange || bestCond.windDirection || bestCond.pressureAvg) ? (
+          <View style={styles.summaryRow}>
+            <CondColumn
+              icon="thermometer-outline"
+              color="#F2A03D"
+              label={t("stats.condTemp")}
+              value={bestCond.waterTempRange ?? "–"}
+            />
+            <View style={styles.summaryDivider} />
+            <CondColumn
+              icon="navigate-outline"
+              color="#6FA8DC"
+              label={t("stats.condWind")}
+              value={bestCond.windSpeedAvg != null ? `${bestCond.windSpeedAvg} m/s` : "–"}
+              sub={bestCond.windDirection ?? undefined}
+            />
+            <View style={styles.summaryDivider} />
+            <CondColumn
+              icon="speedometer-outline"
+              color="#7FC8A9"
+              label={t("stats.condPressure")}
+              value={bestCond.pressureAvg != null ? `${bestCond.pressureAvg}` : "–"}
+              sub={bestCond.pressureAvg != null ? "hPa" : undefined}
+            />
+          </View>
+        ) : (
+          <Text style={styles.lineMuted}>{t("stats.bestConditionsNoData")}</Text>
+        )}
+      </GlassCard>
 
       {/* b) Averages — stat tiles */}
       <SectionHeader title={t("stats.averages")} />
@@ -738,41 +803,6 @@ export default function StatsScreen() {
         )}
       </GlassCard>
 
-      {/* f) Top conditions */}
-      <SectionHeader title={t("stats.bestConditionsTitle")} />
-      <GlassCard style={styles.panel}>
-        {bestCond && (bestCond.waterTempRange || bestCond.windDirection || bestCond.pressureAvg) ? (
-          <View style={styles.condRows}>
-            {bestCond.waterTempRange ? (
-              <View style={styles.condRow}>
-                <Ionicons name="thermometer-outline" size={18} color={Colors.amber} />
-                <Text style={styles.condLabel}>{t("stats.condTemp")}</Text>
-                <Text style={styles.condValue}>{bestCond.waterTempRange}</Text>
-              </View>
-            ) : null}
-            {bestCond.windDirection ? (
-              <View style={styles.condRow}>
-                <Ionicons name="navigate-outline" size={18} color={Colors.amber} />
-                <Text style={styles.condLabel}>{t("stats.condWind")}</Text>
-                <Text style={styles.condValue}>
-                  {bestCond.windDirection}
-                  {bestCond.windSpeedAvg != null ? `  ${bestCond.windSpeedAvg} m/s` : ""}
-                </Text>
-              </View>
-            ) : null}
-            {bestCond.pressureAvg != null ? (
-              <View style={styles.condRow}>
-                <Ionicons name="speedometer-outline" size={18} color={Colors.amber} />
-                <Text style={styles.condLabel}>{t("stats.condPressure")}</Text>
-                <Text style={styles.condValue}>{bestCond.pressureAvg} hPa</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <Text style={styles.lineMuted}>{t("stats.bestConditionsNoData")}</Text>
-        )}
-      </GlassCard>
-
       {/* g) Catches by lure */}
       <SectionHeader title={t("stats.byLure")} />
       <GlassCard style={styles.panel}>
@@ -794,28 +824,43 @@ export default function StatsScreen() {
         )}
       </GlassCard>
 
-      {/* h) Records */}
-      <SectionHeader title={t("stats.records")} />
-      {stats.longestTrip ? (
-        <GlassCard style={styles.panel}>
-          <Text style={styles.recordLabel}>{t("stats.longestTrip")}</Text>
-          <Text style={styles.recordValue}>
-            {stats.longestTrip.distance.toFixed(2)} km / {stats.longestTrip.duration}
-          </Text>
-          <Text style={styles.lineMuted}>{formatDate(stats.longestTrip.date)}</Text>
-        </GlassCard>
-      ) : null}
-      {stats.bestTrip ? (
-        <GlassCard style={styles.panel}>
-          <Text style={styles.recordLabel}>{t("stats.bestTrip")}</Text>
-          <Text style={styles.recordValue}>
-            {t("stats.bestTripValue", {
-              catches: stats.bestTrip.catches,
-              contacts: stats.bestTrip.contacts,
-            })}
-          </Text>
-          <Text style={styles.lineMuted}>{formatDate(stats.bestTrip.date)}</Text>
-        </GlassCard>
+      {/* h) Records. Two full-width cards for two numbers was half a screen
+             of padding; as rows they are still glanceable and take a third of
+             the space. */}
+      {stats.longestTrip || stats.bestTrip ? (
+        <>
+          <SectionHeader title={t("stats.records")} />
+          <GlassCard style={styles.recordCard}>
+            {stats.longestTrip ? (
+              <View style={styles.recordRow}>
+                <Ionicons name="footsteps-outline" size={18} color={Colors.textMuted} />
+                <View style={styles.recordText}>
+                  <Text style={styles.recordRowLabel}>{t("stats.longestTrip")}</Text>
+                  <Text style={styles.recordRowDate}>{formatDate(stats.longestTrip.date)}</Text>
+                </View>
+                <Text style={styles.recordRowValue}>
+                  {stats.longestTrip.distance.toFixed(2)} km / {stats.longestTrip.duration}
+                </Text>
+              </View>
+            ) : null}
+            {stats.longestTrip && stats.bestTrip ? <View style={styles.recordSeparator} /> : null}
+            {stats.bestTrip ? (
+              <View style={styles.recordRow}>
+                <Ionicons name="fish-outline" size={18} color={Colors.textMuted} />
+                <View style={styles.recordText}>
+                  <Text style={styles.recordRowLabel}>{t("stats.bestTrip")}</Text>
+                  <Text style={styles.recordRowDate}>{formatDate(stats.bestTrip.date)}</Text>
+                </View>
+                <Text style={styles.recordRowValue}>
+                  {t("stats.bestTripValue", {
+                    catches: stats.bestTrip.catches,
+                    contacts: stats.bestTrip.contacts,
+                  })}
+                </Text>
+              </View>
+            ) : null}
+          </GlassCard>
+        </>
       ) : null}
     </Screen>
   );
@@ -835,15 +880,6 @@ const styles = StyleSheet.create({
   backText: {
     color: Colors.text,
     fontFamily: Fonts.bodyBold,
-    letterSpacing: 0,
-  },
-  titleBlock: {
-    gap: 2,
-  },
-  kicker: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Fonts.bodySemibold,
     letterSpacing: 0,
   },
   title: {
@@ -871,6 +907,7 @@ const styles = StyleSheet.create({
   },
   avgTile: {
     width: "47%",
+    // Matches heroTile above — same radius, same surface, same hairline.
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 14,
@@ -1088,19 +1125,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Records ──
-  recordLabel: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontFamily: Fonts.bodySemibold,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  recordValue: {
-    color: Colors.textBright,
-    fontSize: 18,
-    fontFamily: Fonts.heading,
-    letterSpacing: 0,
-  },
 
   // ── Empty state ──
   emptyCard: {
@@ -1174,58 +1198,30 @@ const styles = StyleSheet.create({
   },
 
   // ── Top conditions ──
-  condRows: {
-    gap: 12,
-  },
-  condRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  condLabel: {
-    flex: 1,
-    color: Colors.textMuted,
-    fontFamily: Fonts.body,
-    fontSize: 13,
-    letterSpacing: 0,
-  },
-  condValue: {
-    color: Colors.text,
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 13,
-    letterSpacing: 0,
-    textAlign: "right",
-  },
 
   // ── Hero stat tiles ──
-  heroGrid: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 4,
-  },
+  // The tile is now a column inside a shared card, so it carries no surface of
+  // its own. Three cards side by side read as three unrelated facts.
   heroTile: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 12,
-    padding: 12,
     alignItems: "center",
-    gap: 4,
+    gap: 3,
   },
   heroIcon: {
     marginBottom: 2,
   },
   heroValue: {
-    color: Colors.text,
+    color: Colors.textBright,
     fontFamily: Fonts.black,
-    fontSize: 22,
+    fontSize: 26,
     letterSpacing: 0,
-    lineHeight: 26,
+    lineHeight: 30,
   },
   heroLabel: {
     color: Colors.textMuted,
-    fontFamily: Fonts.body,
+    fontFamily: Fonts.bodySemibold,
     fontSize: 10,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     textTransform: "uppercase",
     textAlign: "center",
   },
@@ -1255,5 +1251,90 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.body,
     fontSize: 11,
     letterSpacing: 0,
+  },
+
+  // ── Summary cards (observations, conditions) ──
+  summaryCard: {
+    padding: 16,
+    gap: 12,
+  },
+  cardLabel: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  // A hairline between columns rather than a gap. A gap alone lets the eye
+  // group the wrong pairs when the middle value is short.
+  summaryDivider: {
+    width: 1,
+    alignSelf: "stretch",
+    marginHorizontal: 6,
+    backgroundColor: Colors.border,
+  },
+  condColumn: {
+    flex: 1,
+    alignItems: "center",
+    gap: 3,
+  },
+  condColumnLabel: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    letterSpacing: 0,
+  },
+  condColumnValue: {
+    color: Colors.textBright,
+    fontFamily: Fonts.heading,
+    fontSize: 19,
+    letterSpacing: 0,
+  },
+  condColumnSub: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    letterSpacing: 0,
+  },
+
+  // ── Records as rows ──
+  recordCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  recordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+  },
+  recordText: {
+    flex: 1,
+    gap: 1,
+  },
+  recordRowLabel: {
+    color: Colors.text,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
+  recordRowDate: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+  },
+  recordRowValue: {
+    color: Colors.textBright,
+    fontFamily: Fonts.heading,
+    fontSize: 14,
+    letterSpacing: 0,
+  },
+  recordSeparator: {
+    height: 1,
+    backgroundColor: Colors.border,
   },
 });

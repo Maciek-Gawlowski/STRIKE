@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   skip: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemi,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0
   },
   slide: {
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   title: {
     color: Colors.textBright,
     fontFamily: Fonts.headingBlack,
-    fontSize: 30,
+    fontSize: 26,
     textAlign: "center",
     letterSpacing: 0
   },

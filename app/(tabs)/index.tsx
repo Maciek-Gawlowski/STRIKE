@@ -10,7 +10,6 @@ import { ActionButton } from "@/components/ActionButton";
 import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { GlassCard } from "@/components/GlassCard";
 import { LureColourDot } from "@/components/LureColourDot";
-import { MetricChip } from "@/components/MetricChip";
 import { Screen } from "@/components/Screen";
 import { SectionHeader } from "@/components/SectionHeader";
 import { StatCard } from "@/components/StatCard";
@@ -93,6 +92,7 @@ export default function HomeScreen() {
   const hasGpsFix = useStrikeStore((state) => state.hasGpsFix);
   const trips = useStrikeStore((state) => state.trips);
   const weather = useStrikeStore((state) => state.weather);
+  const waterLevel = useStrikeStore((state) => state.waterLevel);
   const startTrip = useStrikeStore((state) => state.startTrip);
   const stopTrip = useStrikeStore((state) => state.stopTrip);
   const addEvent = useStrikeStore((state) => state.addEvent);
@@ -108,6 +108,7 @@ export default function HomeScreen() {
   const [now, setNow] = useState(Date.now());
   const [tripNameOpen, setTripNameOpen] = useState(false);
   const [tripTitle, setTripTitle] = useState("");
+  const backgroundGapSeconds = useStrikeStore((state) => state.backgroundGapSeconds);
   // What we pre-filled the name field with. Pressing straight through a
   // suggestion is not the user naming the trip — without this, the suggested
   // name (itself copied from a nearby earlier trip) counted as typed, the
@@ -186,23 +187,6 @@ export default function HomeScreen() {
     [displayTrip]
   );
 
-  type ChipDef = { icon: "walk-outline" | "time-outline" | "water-outline" | "navigate-outline"; label: string };
-
-  const overblikChips = useMemo((): ChipDef[] => {
-    if (!displayTrip) return [];
-    const endTime = activeTrip ? new Date(now).toISOString() : displayTrip.endedAt;
-    const chips: ChipDef[] = [
-      { icon: "walk-outline", label: formatDistance(displayTrip.distanceMeters) },
-      { icon: "time-outline", label: formatDuration(displayTrip.startedAt, endTime) }
-    ];
-    if (weather?.waterTemp != null) {
-      chips.push({ icon: "water-outline", label: t("weather.water", { v: Math.round(weather.waterTemp) }) });
-    }
-    if (weather) {
-      chips.push({ icon: "navigate-outline", label: formatWind(weather) });
-    }
-    return chips;
-  }, [displayTrip, activeTrip, now, weather, t]);
 
   const recentTrips = trips.slice(0, 3);
   const isEmpty = trips.length === 0 && !activeTrip;
@@ -332,10 +316,20 @@ export default function HomeScreen() {
   }, [activeTrip, stopTrip, t]);
 
   // Check on mount and every time the app comes to the foreground.
+  //
+  // The same listener drives the background-gap counter. STRIKE records a
+  // route only while it is on screen, so time spent off screen is a hole in
+  // the trip — and the app used to fold that hole silently into the distance.
   useEffect(() => {
     checkTripAge();
+    const store = useStrikeStore.getState();
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") checkTripAge();
+      if (state === "active") {
+        checkTripAge();
+        store.noteAppForegrounded();
+      } else if (state === "background") {
+        store.noteAppBackgrounded();
+      }
     });
     return () => sub.remove();
   }, [checkTripAge]);
@@ -446,6 +440,16 @@ export default function HomeScreen() {
               <Ionicons name="chevron-down" size={11} color={Colors.textMuted} />
             </Pressable>
           ) : null}
+          {backgroundGapSeconds >= 60 ? (
+            <View style={styles.gapNotice}>
+              <Ionicons name="pause-circle-outline" size={15} color={Colors.textMuted} />
+              <Text style={styles.gapNoticeText}>
+                {t("home.backgroundGap", {
+                  minutes: Math.round(backgroundGapSeconds / 60)
+                })}
+              </Text>
+            </View>
+          ) : null}
           <Pressable style={styles.stopButton} onPress={handleStop}>
             <Ionicons name="stop-circle-outline" size={20} color={Colors.dangerText} />
             <Text style={styles.stopText}>{t("actions.stopTrip")}</Text>
@@ -462,31 +466,63 @@ export default function HomeScreen() {
         </StatCard>
       ) : displayTrip ? (
         <>
-          <SectionHeader
-            title={t("home.overblik")}
-            linkLabel={activeTrip ? t("home.openRouteMap") : undefined}
-            onLinkPress={activeTrip ? () => router.push("/map") : undefined}
-          />
+          {/* No section label above this card. It is the main thing on the
+              screen; naming it "OVERVIEW" tells the reader nothing they cannot
+              see. The link that used to sit beside the label is now the card
+              itself — during a trip it opens the live route map. */}
           <Pressable
             style={styles.overblikCard}
-            onPress={!activeTrip ? () => router.push(`/trip/${displayTrip.id}`) : undefined}
+            onPress={() =>
+              activeTrip ? router.push("/map") : router.push(`/trip/${displayTrip.id}`)
+            }
           >
-            <TripMap
-              route={displayTrip.route}
-              events={displayTrip.events}
-              height={150}
-              interactive={false}
-              isActive={!!activeTrip}
-              currentLocation={activeTrip ? currentLocation ?? undefined : undefined}
-              vignette
-            />
-            {overblikChips.length > 0 ? (
-              <View style={styles.chipRow}>
-                {overblikChips.map((chip) => (
-                  <MetricChip key={chip.label} icon={chip.icon} label={chip.label} />
-                ))}
-              </View>
+            {/* No map when there is no route to draw. A 150 px picture of
+                coastline with a box over it saying "no route recorded" is a
+                hole in the layout pretending to be content. */}
+            {displayTrip.route.length > 1 || activeTrip ? (
+              <TripMap
+                route={displayTrip.route}
+                events={displayTrip.events}
+                height={150}
+                interactive={false}
+                isActive={!!activeTrip}
+                currentLocation={activeTrip ? currentLocation ?? undefined : undefined}
+                vignette
+              />
             ) : null}
+            <View style={styles.tripPanel}>
+              {!activeTrip ? (
+                <Text style={styles.tripPanelTitle} numberOfLines={1}>
+                  {displayTrip.title}
+                </Text>
+              ) : null}
+              <View style={styles.tripPanelPrimary}>
+                <View>
+                  <Text style={styles.tripPanelValue}>
+                    {formatDuration(displayTrip.startedAt, activeTrip ? new Date(now).toISOString() : displayTrip.endedAt)}
+                  </Text>
+                  <Text style={styles.tripPanelLabel}>{t("metrics.time")}</Text>
+                </View>
+                <View style={styles.tripPanelDivider} />
+                <View>
+                  <Text style={styles.tripPanelValue}>{formatDistance(displayTrip.distanceMeters)}</Text>
+                  <Text style={styles.tripPanelLabel}>{t("metrics.distance")}</Text>
+                </View>
+              </View>
+              {weather ? (
+                <Text style={styles.tripPanelContext} numberOfLines={1}>
+                  {[
+                    weather.waterTemp != null
+                      ? t("weather.water", { v: Math.round(weather.waterTemp) })
+                      : null,
+                    formatWind(weather),
+                    waterLevel?.stationName ?? null
+                  ]
+                    .filter(Boolean)
+                    .join("   ·   ")}
+                </Text>
+              ) : null}
+            </View>
           </Pressable>
 
           {/* Counter row */}
@@ -507,29 +543,17 @@ export default function HomeScreen() {
                 <Text style={styles.counterLabel}>{t("home.counter.catches")}</Text>
               </View>
             </View>
+            {streakData && (streakData.tripsThisWeek > 0 || streakData.consecutiveDays > 0) ? (
+              <Text style={styles.streakLine} numberOfLines={1}>
+                {[
+                  streakData.tripsThisWeek > 0 ? t("home.streak", { n: streakData.tripsThisWeek }) : null,
+                  streakData.consecutiveDays > 0 ? t("home.streakDays", { n: streakData.consecutiveDays }) : null
+                ]
+                  .filter(Boolean)
+                  .join("  ·  ")}
+              </Text>
+            ) : null}
           </GlassCard>
-
-          {/* Streak chips */}
-          {streakData && (streakData.tripsThisWeek > 0 || streakData.consecutiveDays > 0) ? (
-            <View style={styles.streakRow}>
-              {streakData.tripsThisWeek > 0 ? (
-                <View style={styles.streakChip}>
-                  <Ionicons name="calendar-outline" size={13} color={Colors.amber} />
-                  <Text style={styles.streakChipText}>
-                    {t("home.streak", { n: streakData.tripsThisWeek })}
-                  </Text>
-                </View>
-              ) : null}
-              {streakData.consecutiveDays > 0 ? (
-                <View style={styles.streakChip}>
-                  <Ionicons name="flame-outline" size={13} color={Colors.amber} />
-                  <Text style={styles.streakChipText}>
-                    {t("home.streakDays", { n: streakData.consecutiveDays })}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
         </>
       ) : null}
 
@@ -561,20 +585,12 @@ export default function HomeScreen() {
                 >
                   <View style={styles.tripCardMain}>
                     <Text style={styles.tripName} numberOfLines={1}>{trip.title}</Text>
-                    <Text style={styles.tripDate}>
-                      {new Date(trip.startedAt).toLocaleDateString([], {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric"
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.tripBadges}>
-                    <Text style={styles.tripBadge}>
-                      {t("logbook.catchesCount", { count: catches })}
-                    </Text>
-                    <Text style={styles.tripBadge}>
-                      {t("logbook.contactsCount", { count: contacts })}
+                    <Text style={styles.tripMeta} numberOfLines={1}>
+                      {[
+                        new Date(trip.startedAt).toLocaleDateString([], { month: "short", day: "numeric" }),
+                        t("logbook.catchesCount", { count: catches }),
+                        t("logbook.contactsCount", { count: contacts })
+                      ].join("  ·  ")}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
@@ -702,7 +718,7 @@ const styles = StyleSheet.create({
   recoverTitle: {
     color: Colors.amber,
     fontFamily: Fonts.heading,
-    fontSize: 14,
+    fontSize: 13,
     letterSpacing: 0,
   },
   recoverBody: {
@@ -752,11 +768,8 @@ const styles = StyleSheet.create({
 
   // Header hero card — no overflow:hidden (solid bg, nothing to clip)
   headerHero: {
-    borderRadius: 16,
-    paddingTop: 18,
-    paddingBottom: 26,
-    paddingHorizontal: 8,
-    backgroundColor: Colors.navy
+    paddingTop: 2,
+    paddingBottom: 2
   },
 
   // Header content row
@@ -770,22 +783,39 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 12
   },
-  kicker: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Fonts.bodySemibold,
-    letterSpacing: 0
-  },
   logoImage: {
-    width: 110,
-    height: 68,
+    width: 88,
+    height: 52,
+    marginLeft: -2
   },
+  // Muted, not amber. Amber means "you can tap this" everywhere else in this
+  // app; a permanent amber strapline under the logo makes the one colour that
+  // should mean action mean nothing at all.
   tagline: {
-    color: Colors.amber,
+    color: Colors.textMuted,
     fontSize: 11,
     fontFamily: Fonts.bodySemibold,
-    letterSpacing: 2,
-    marginTop: 2
+    letterSpacing: 1.4,
+    marginTop: 1
+  },
+
+  // Background-gap notice. Deliberately quiet: it is an explanation, not an
+  // error, and nothing here is tappable — so no amber.
+  gapNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: Colors.field,
+  },
+  gapNoticeText: {
+    flex: 1,
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    lineHeight: 17,
   },
 
   // Lure change pill
@@ -804,7 +834,7 @@ const styles = StyleSheet.create({
   lureChangePillText: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0,
     maxWidth: 140,
   },
@@ -825,7 +855,7 @@ const styles = StyleSheet.create({
   spotHistoryText: {
     color: Colors.text,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0,
   },
   eventRow: {
@@ -846,7 +876,7 @@ const styles = StyleSheet.create({
   stopText: {
     color: Colors.dangerText,
     fontFamily: Fonts.heading,
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0
   },
 
@@ -858,11 +888,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.glassBorder
   },
-  chipRow: {
+  // Two numbers with room to breathe, then one quiet line of context beneath.
+  tripPanel: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 15,
+    gap: 10
+  },
+  tripPanelTitle: {
+    color: Colors.textBright,
+    fontFamily: Fonts.heading,
+    fontSize: 17,
+    letterSpacing: 0
+  },
+  tripPanelPrimary: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    padding: 14
+    alignItems: "center",
+    gap: 18
+  },
+  tripPanelDivider: {
+    width: 1,
+    alignSelf: "stretch",
+    backgroundColor: Colors.border
+  },
+  tripPanelValue: {
+    color: Colors.textBright,
+    fontFamily: Fonts.heading,
+    fontSize: 26,
+    letterSpacing: -0.5
+  },
+  tripPanelLabel: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.bodySemibold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginTop: 1
+  },
+  tripPanelContext: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 13
   },
 
   // Counter row
@@ -880,14 +946,14 @@ const styles = StyleSheet.create({
   },
   counterValue: {
     color: Colors.textBright,
-    fontSize: 48,
+    fontSize: 44,
     fontFamily: Fonts.black,
     letterSpacing: -1,
     lineHeight: 54
   },
   counterLabel: {
     color: Colors.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 1.5,
     textTransform: "uppercase"
@@ -898,28 +964,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border
   },
 
-  // Streak chips
-  streakRow: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  streakChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    height: 30,
-    paddingHorizontal: 12,
-    borderRadius: 15,
-    backgroundColor: Colors.field,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  streakChipText: {
-    color: Colors.text,
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 12,
-    letterSpacing: 0,
+  // A footnote to the counters above it, not a chip of its own.
+  streakLine: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 12
   },
 
   // Welcome card
@@ -929,7 +980,7 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     color: Colors.textBright,
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: Fonts.heading,
     letterSpacing: 0
   },
@@ -971,24 +1022,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0
   },
-  tripDate: {
+  tripMeta: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 12
-  },
-  tripBadges: {
-    flexDirection: "row",
-    gap: 6
-  },
-  tripBadge: {
-    color: Colors.text,
-    fontSize: 11,
-    fontFamily: Fonts.bodySemibold,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    overflow: "hidden",
-    backgroundColor: Colors.pill
+    fontSize: 13
   },
 
   // Modal
@@ -1008,7 +1045,7 @@ const styles = StyleSheet.create({
   },
   modalKicker: {
     color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 0
   },
@@ -1020,7 +1057,7 @@ const styles = StyleSheet.create({
   },
   modalText: {
     color: Colors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
     fontFamily: Fonts.body
   },
@@ -1030,7 +1067,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     color: Colors.text,
     backgroundColor: Colors.field,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: Fonts.body
   },
   modalActions: {
@@ -1115,7 +1152,7 @@ const styles = StyleSheet.create({
   celebText: {
     color: Colors.catchText,
     fontFamily: Fonts.black,
-    fontSize: 36,
+    fontSize: 34,
     letterSpacing: 0,
   },
 });

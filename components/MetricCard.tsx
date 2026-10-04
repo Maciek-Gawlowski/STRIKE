@@ -33,11 +33,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0
   },
   label: {
-    color: Colors.text,
-    fontSize: 12,
+    color: Colors.textMuted,
+    fontSize: 11,
     fontFamily: Fonts.bodySemibold,
     marginTop: 4,
     textTransform: "uppercase",
-    letterSpacing: 0
+    letterSpacing: 0.8
   }
 });

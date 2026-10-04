@@ -4,6 +4,7 @@ import { Alert, Linking } from "react-native";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
 import { timeOfDayKey } from "@/services/tripName";
+import { hasPrimedLocation, markLocationPrimed } from "@/database/preferences";
 
 const WEATHER_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -33,6 +34,7 @@ export function TripWatcher() {
      */
     const startMockTracking = () => {
       if (!__DEV__) return;
+      console.warn("[strike/gps] simulated tracking active — this route is not real");
       mockTimer = setInterval(() => {
         const state = useStrikeStore.getState();
         const last = state.activeTrip?.route.at(-1) ?? state.currentLocation ?? {
@@ -50,24 +52,44 @@ export function TripWatcher() {
     };
 
     const start = async () => {
+      // Explain before iOS asks. The system dialog is one shot: decline it and
+      // it never appears again, and the app silently records nothing forever.
+      // A sentence about why buys back most of the reflexive "Don't allow".
+      const existing = await Location.getForegroundPermissionsAsync();
+      if (existing.status === "undetermined" && !(await hasPrimedLocation())) {
+        await markLocationPrimed();
+        await new Promise<void>((resolve) => {
+          Alert.alert(
+            t("trip.locationPrimeTitle"),
+            t("trip.locationPrimeBody"),
+            [{ text: t("trip.locationPrimeBtn"), onPress: () => resolve() }],
+            { onDismiss: () => resolve() }
+          );
+        });
+        if (!mounted) return;
+      }
+
       const permission = await Location.requestForegroundPermissionsAsync();
       if (!mounted) {
         return;
       }
 
       if (permission.status !== "granted") {
-        // Without mock tracking a release build would record nothing and say
-        // nothing, so tell the user why the map stays empty.
-        if (!__DEV__) {
-          Alert.alert(
-            t("trip.locationDeniedTitle"),
-            t("trip.locationDeniedBody"),
-            [
-              { text: t("common.cancel"), style: "cancel" },
-              { text: t("trip.locationDeniedOpenSettings"), onPress: () => void Linking.openSettings() }
-            ]
-          );
-        }
+        // This alert used to be suppressed in development, which meant the one
+        // person able to fix a permissions problem was the only one never told
+        // about it: the app switched to fabricated positions in silence and
+        // looked like it was tracking. Whoever is holding the phone gets told.
+        console.warn(
+          `[strike/gps] location permission ${permission.status} — falling back to simulated positions`
+        );
+        Alert.alert(
+          t("trip.locationDeniedTitle"),
+          t("trip.locationDeniedBody"),
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("trip.locationDeniedOpenSettings"), onPress: () => void Linking.openSettings() }
+          ]
+        );
         startMockTracking();
         return;
       }
@@ -121,7 +143,14 @@ export function TripWatcher() {
             );
           }
         );
-      } catch {
+      } catch (error) {
+        // Same reasoning: a GPS failure that quietly becomes a fake route is
+        // indistinguishable from a real one on screen.
+        console.warn(
+          `[strike/gps] position unavailable, falling back to simulated positions: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
         startMockTracking();
       }
     };

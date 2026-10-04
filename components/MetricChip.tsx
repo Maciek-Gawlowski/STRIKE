@@ -32,7 +32,7 @@ const styles = StyleSheet.create({
   label: {
     color: Colors.text,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 0
   }
 });

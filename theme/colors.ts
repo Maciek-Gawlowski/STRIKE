@@ -7,8 +7,14 @@
  */
 export const Colors = {
   // Core brand
-  navy: "#0D1B2A", // primary background
-  teal: "#1B3A4B", // cards / secondary backgrounds
+  //
+  // There is exactly ONE card surface in this app. Before, `card` (#1B3A4B)
+  // and `glassBg` (#141F2C) were both in use, so a Statistics screen could
+  // show a dark tile and a light blue tile side by side and look like two
+  // half-finished designs stitched together. They now resolve to the same
+  // colour, and the only legitimate steps are: ground → card → elevated.
+  navy: "#0B1521", // primary background — same value as bgMid, one ground
+  teal: "#1B2735", // elevated surface sitting ON a card
   green: "#4C6B5A", // muted accent / subtle active states
   grey: "#D9DAD5", // primary text / labels
   amber: "#FFBA00", // highlights, CTAs, active state
@@ -29,9 +35,9 @@ export const Colors = {
   textOnAmber: "#0D1B2A", // text/icons on amber surfaces
 
   // Surfaces
-  card: "#1B3A4B",
-  cardElevated: "#21455A",
-  pill: "#0D1B2A", // dark pill on a teal card
+  card: "#141F2C", // THE card surface — identical to glassBg by design
+  cardElevated: "#1B2735", // a card sitting on a card
+  pill: "#0E1926", // recessed pill inside a card
   field: "rgba(217, 218, 213, 0.06)", // inputs / inactive toggles / icon buttons
   // Cards are separated by being lighter than the ground, not by being drawn
   // around. A visible 1px outline on every card is the single biggest reason
