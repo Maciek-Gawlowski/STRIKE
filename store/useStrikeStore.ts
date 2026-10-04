@@ -14,7 +14,15 @@ import {
   upsertTrip,
   type WeatherSnapshot,
 } from "@/database/queries";
-import { hasSeeded, loadAppState, markSeeded, saveAppState } from "@/database/preferences";
+import {
+  closeTripGap,
+  hasSeeded,
+  loadAppState,
+  markSeeded,
+  markTripBackgrounded,
+  resetTripGap,
+  saveAppState
+} from "@/database/preferences";
 import {
   fetchWeather,
   syncPendingWeather,
@@ -80,6 +88,17 @@ type StrikeState = {
   waterLevel: WaterLevelData | null;
   mapType: MapType;
   recoveredStaleTrip: Trip | null;
+  /**
+   * Seconds the active trip spent with the app in the background. iOS suspends
+   * the process, so no positions arrive in that window and the route would
+   * otherwise be drawn as a straight line across it. The home screen shows this
+   * so a gap reads as a gap rather than as a walk the angler never took.
+   */
+  backgroundGapSeconds: number;
+  /** App left the foreground: remember when, so the gap can be measured. */
+  noteAppBackgrounded: () => void;
+  /** App came back: add the elapsed time to the trip’s running gap total. */
+  noteAppForegrounded: () => void;
   refreshWeather: (position?: Coordinate) => void;
   refreshWaterLevel: (position?: Coordinate | null) => void;
   /**
@@ -282,6 +301,20 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
   waterLevel: null,
   mapType: "standard",
   recoveredStaleTrip: null,
+  backgroundGapSeconds: 0,
+  noteAppBackgrounded: () => {
+    if (!get().activeTrip) return;
+    void markTripBackgrounded();
+  },
+  noteAppForegrounded: () => {
+    if (!get().activeTrip) {
+      set({ backgroundGapSeconds: 0 });
+      return;
+    }
+    // closeTripGap ignores anything under a minute — glancing at another app
+    // is not a gap worth warning about.
+    void closeTripGap().then((total) => set({ backgroundGapSeconds: total }));
+  },
   refreshWeather: (position) => {
     const target = position ?? get().currentLocation;
     if (!target) {
@@ -344,6 +377,9 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     return true;
   },
   startTrip: (position, source = "mock", title, lureId, titleIsAuto = false) => {
+    // A new trip starts with a clean background-gap tally.
+    void resetTripGap();
+    set({ backgroundGapSeconds: 0 });
     const startPosition = position ?? get().currentLocation ?? demoStart;
     const startedAt = new Date();
     const tripTitle = title?.trim() || defaultTripTitle(startedAt);
