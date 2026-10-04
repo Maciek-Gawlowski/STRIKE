@@ -131,7 +131,11 @@ export default function BiteMapScreen() {
   const [customTo, setCustomTo] = useState("");
   const [customSince, setCustomSince] = useState<string | null>(null);
   const [customUntil, setCustomUntil] = useState<string | null>(null);
-  const [speciesFilter, setSpeciesFilter] = useState<string>("havoerred");
+  // No species filter by default. The server reads a species as "catches of
+  // that species only", so defaulting to one hid every follow and contact and
+  // left a fresh install staring at an empty map — which is exactly what a
+  // tester reads as "the app is broken".
+  const [speciesFilter, setSpeciesFilter] = useState<string>("");
   const [eventTypeFilter, setEventTypeFilter] = useState<string[]>([]);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [hexes, setHexes] = useState<HexActivity[]>([]);
@@ -323,7 +327,7 @@ export default function BiteMapScreen() {
     setSelectedSpot(null);
   }, []);
 
-  const hasActiveFilters = speciesFilter !== "havoerred" || eventTypeFilter.length > 0;
+  const hasActiveFilters = speciesFilter !== "" || eventTypeFilter.length > 0;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -575,8 +579,12 @@ export default function BiteMapScreen() {
                   key={sp.key}
                   style={[styles.filterChip, speciesFilter === sp.key && styles.filterChipActive]}
                   onPress={() => {
-                    setSpeciesFilter(sp.key);
-                    void AsyncStorage.setItem(SPECIES_PREF_KEY, sp.key);
+                    // Tapping the active chip clears the filter. There is no
+                    // "all species" chip, so without this the filter could be
+                    // set but never unset.
+                    const next = speciesFilter === sp.key ? "" : sp.key;
+                    setSpeciesFilter(next);
+                    void AsyncStorage.setItem(SPECIES_PREF_KEY, next);
                   }}
                 >
                   <Text style={[styles.filterChipText, speciesFilter === sp.key && styles.filterChipTextActive]}>
