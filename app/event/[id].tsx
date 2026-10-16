@@ -26,6 +26,7 @@ import { degreesToCompass } from "@/services/weather";
 import { useStrikeStore, type StrikeEvent } from "@/store/useStrikeStore";
 import type { WaterLevelTrend } from "@/services/dmi";
 import { useTranslation } from "@/i18n";
+import { ALL_SPECIES, speciesLabel } from "@/constants/species";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
 
@@ -342,7 +343,7 @@ export default function EventDetailScreen() {
                   >
                     <Ionicons name="fish-outline" size={14} color={Colors.textBright} />
                     <Text style={styles.changePhotoBtnText}>
-                      {c.species?.trim() ? c.species : `${t("events.catch")} ${idx + 1}`}
+                      {c.species?.trim() ? speciesLabel(c.species, t) : `${t("events.catch")} ${idx + 1}`}
                     </Text>
                   </Pressable>
                 ))}
@@ -364,14 +365,33 @@ export default function EventDetailScreen() {
           {/* Catch-specific fields */}
           {isCatch ? (
             <>
+              {/*
+                A list, not a text field. Typed species produced "havørred",
+                "Havørred" and "hav ørred" as three different fish in the
+                statistics, and none of them matched the Activity Map's filter,
+                which compares keys. Anything typed before this change is still
+                shown — see speciesLabel — it just cannot be added to any more.
+              */}
               <EditRow label={t("eventEdit.species")}>
-                <TextInput
-                  style={styles.textInput}
-                  value={edit.species}
-                  onChangeText={(v) => setEdit((p) => ({ ...p, species: v }))}
-                  placeholder={t("eventEdit.species")}
-                  placeholderTextColor={Colors.textMuted}
-                />
+                <View style={styles.speciesGrid}>
+                  {ALL_SPECIES.map((sp) => {
+                    const active = edit.species === sp.key;
+                    return (
+                      <Pressable
+                        key={sp.key}
+                        style={[styles.speciesChip, active && styles.speciesChipActive]}
+                        onPress={() => setEdit((p) => ({ ...p, species: active ? "" : sp.key }))}
+                      >
+                        <Text
+                          style={[styles.speciesChipText, active && styles.speciesChipTextActive]}
+                          numberOfLines={1}
+                        >
+                          {t(sp.labelKey as never)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </EditRow>
 
               <EditRow label={t("eventEdit.length")}>
@@ -546,7 +566,7 @@ export default function EventDetailScreen() {
               value={`${dateStr} · ${timeStr}`}
             />
             {isCatch && event.species ? (
-              <DetailRow icon="fish-outline" label={t("catchDetail.species")} value={event.species} />
+              <DetailRow icon="fish-outline" label={t("catchDetail.species")} value={speciesLabel(event.species, t)} />
             ) : null}
             {isCatch && event.kept !== undefined ? (
               <DetailRow
@@ -885,6 +905,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.5,
     textTransform: "uppercase",
+  },
+speciesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  speciesChip: {
+    paddingHorizontal: 13,
+    minHeight: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.field
+  },
+  speciesChipActive: {
+    backgroundColor: Colors.amber
+  },
+  speciesChipText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontFamily: Fonts.bodySemibold
+  },
+  speciesChipTextActive: {
+    color: Colors.textOnAmber
   },
   textInput: {
     backgroundColor: Colors.field,

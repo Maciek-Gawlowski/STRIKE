@@ -15,6 +15,7 @@ import { degreesToCompass } from "@/services/weather";
 import { getStreakData } from "@/services/statistics";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
+import { speciesLabel } from "@/constants/species";
 import { Fonts } from "@/theme/fonts";
 
 export default function SummaryScreen() {
@@ -230,7 +231,7 @@ export default function SummaryScreen() {
                   {/* Info */}
                   <View style={styles.catchInfo}>
                     <Text style={styles.catchSpecies} numberOfLines={1}>
-                      {event.species ?? t("events.catch")}
+                      {speciesLabel(event.species, t) || t("events.catch")}
                     </Text>
                     {event.lengthCm != null ? (
                       <Text style={styles.catchMeta}>{event.lengthCm} cm</Text>

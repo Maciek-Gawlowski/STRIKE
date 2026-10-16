@@ -8,6 +8,7 @@ import { TripMap } from "@/components/TripMap";
 import { useTranslation } from "@/i18n";
 import { formatDistance, formatDuration, useStrikeStore } from "@/store/useStrikeStore";
 import { Colors } from "@/theme/colors";
+import { speciesLabel } from "@/constants/species";
 import { Fonts } from "@/theme/fonts";
 
 export default function TripReviewScreen() {
@@ -184,7 +185,7 @@ export default function TripReviewScreen() {
             event.type === "photo" ? "camera-outline" :
             event.type === "lure" ? "pricetag-outline" : "flash-outline";
           const typeLabel =
-            event.type === "catch" ? (event.species ?? t("events.catch")) :
+            event.type === "catch" ? (speciesLabel(event.species, t) || t("events.catch")) :
             event.type === "following" ? t("events.following") :
             event.type === "photo" ? t("events.photo") :
             event.type === "lure" ? t("events.lure", { name: event.comment ?? "" }) :

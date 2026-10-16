@@ -20,6 +20,7 @@ import {
   formatDuration,
   useStrikeStore,
   type Coordinate,
+  type StrikeEvent,
   type Trip
 } from "@/store/useStrikeStore";
 import { getDb } from "@/database/db";
@@ -28,6 +29,7 @@ import { getLures, type Lure } from "@/database/lures";
 import { formatWind } from "@/services/weather";
 import { timeOfDayKey } from "@/services/tripName";
 import { getStreakData, type StreakData } from "@/services/statistics";
+import { SALTWATER_SPECIES } from "@/constants/species";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
@@ -97,6 +99,7 @@ export default function HomeScreen() {
   const stopTrip = useStrikeStore((state) => state.stopTrip);
   const addEvent = useStrikeStore((state) => state.addEvent);
   const addCatch = useStrikeStore((state) => state.addCatch);
+  const updateEvent = useStrikeStore((state) => state.updateEvent);
   const recoveredStaleTrip = useStrikeStore((state) => state.recoveredStaleTrip);
   const changeLure = useStrikeStore((state) => state.changeLure);
   const saveRecoveredTrip = useStrikeStore((state) => state.saveRecoveredTrip);
@@ -119,6 +122,8 @@ export default function HomeScreen() {
   const [modalLures, setModalLures] = useState<Lure[]>([]);
   const [streakData, setStreakData] = useState<StreakData | null>(null);
   const [lureChangeOpen, setLureChangeOpen] = useState(false);
+  // The catch waiting for a species, straight after it was logged.
+  const [speciesPrompt, setSpeciesPrompt] = useState<StrikeEvent | null>(null);
   const [selectedLureId, setSelectedLureId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -253,7 +258,11 @@ export default function HomeScreen() {
 
   const handleCatch = useCallback(async () => {
     if (!activeTrip) return;
-    addCatch({
+    // The catch is written first and the species asked for afterwards. Pressing
+    // the button with a fish in one hand has to record something immediately —
+    // if the species were a required step before saving, the honest outcome on
+    // a windy beach is that nothing gets logged at all.
+    const created = addCatch({
       species: "",
       comment: "",
       kept: false,
@@ -267,7 +276,20 @@ export default function HomeScreen() {
       Animated.delay(320),
       Animated.timing(celebAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
+    if (created) setSpeciesPrompt(created);
   }, [activeTrip, addCatch, currentLocation, celebAnim]);
+
+  /**
+   * Attaches a species to the catch that was just logged. `resyncBiteMap` is
+   * what pushes the corrected species to the shared map — the row went up the
+   * moment the catch was created, carrying no species at all.
+   */
+  const confirmSpecies = useCallback((key: string) => {
+    const event = speciesPrompt;
+    setSpeciesPrompt(null);
+    if (!event || !activeTrip) return;
+    updateEvent(activeTrip.id, { ...event, species: key }, { resyncBiteMap: true });
+  }, [speciesPrompt, activeTrip, updateEvent]);
 
   const handlePhoto = useCallback(async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -609,6 +631,55 @@ export default function HomeScreen() {
         <Ionicons name="fish-outline" size={80} color={Colors.navy} />
         <Text style={styles.celebText}>{t("events.catch")}</Text>
       </Animated.View>
+
+      {/* ── Species prompt — opens by itself after a catch is logged ── */}
+      <Modal
+        visible={speciesPrompt !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSpeciesPrompt(null)}
+      >
+        {/* Tapping outside dismisses without a species. The catch is already
+            saved, so skipping costs the angler nothing but the detail. */}
+        <Pressable style={styles.modalScrim} onPress={() => setSpeciesPrompt(null)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t("catch.whatDidYouCatch")}</Text>
+            <View style={styles.speciesGrid}>
+              {SALTWATER_SPECIES.map((sp) => (
+                <Pressable
+                  key={sp.key}
+                  style={styles.speciesChip}
+                  onPress={() => confirmSpecies(sp.key)}
+                >
+                  <Text style={styles.speciesChipText} numberOfLines={1}>
+                    {t(sp.labelKey as never)}
+                  </Text>
+                </Pressable>
+              ))}
+              <Pressable style={styles.speciesChip} onPress={() => confirmSpecies("other")}>
+                <Text style={styles.speciesChipText} numberOfLines={1}>
+                  {t("catch.speciesList.other")}
+                </Text>
+              </Pressable>
+            </View>
+            <View style={styles.speciesFooter}>
+              <Pressable
+                hitSlop={8}
+                onPress={() => {
+                  const event = speciesPrompt;
+                  setSpeciesPrompt(null);
+                  if (event) router.push(`/event/${event.id}`);
+                }}
+              >
+                <Text style={styles.speciesMoreText}>{t("catch.moreDetails")}</Text>
+              </Pressable>
+              <Pressable hitSlop={8} onPress={() => setSpeciesPrompt(null)}>
+                <Text style={styles.speciesSkipText}>{t("common.skip")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* ── Lure change modal ── */}
       <Modal visible={lureChangeOpen} transparent animationType="fade" onRequestClose={() => setLureChangeOpen(false)}>
@@ -1042,6 +1113,42 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border
+  },
+  // A grid rather than a list: nine species in one glance beats scrolling a
+  // column with wet hands, and the tap targets stay comfortably past 44 px.
+  speciesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  speciesChip: {
+    paddingHorizontal: 14,
+    minHeight: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.field
+  },
+  speciesChipText: {
+    color: Colors.text,
+    fontSize: 15,
+    fontFamily: Fonts.bodySemibold
+  },
+  speciesFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 4
+  },
+  speciesMoreText: {
+    color: Colors.amber,
+    fontSize: 14,
+    fontFamily: Fonts.bodySemibold
+  },
+  speciesSkipText: {
+    color: Colors.textMuted,
+    fontSize: 14,
+    fontFamily: Fonts.body
   },
   modalKicker: {
     color: Colors.textMuted,

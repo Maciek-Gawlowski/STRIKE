@@ -187,7 +187,9 @@
       "suder": "Tench",
       "karpe": "Carp",
       "other": "Other"
-    }
+    },
+    "whatDidYouCatch": "What did you catch?",
+    "moreDetails": "More details"
   },
   "catchDetail": {
     "kicker": "CATCH DETAILS",
@@ -229,8 +231,14 @@
   "logbook": {
     "kicker": "LOCAL LOGBOOK",
     "title": "Previous trips",
-    "catchesCount": { "one": "1 catch", "other": "{{count}} catches" },
-    "contactsCount": { "one": "1 contact", "other": "{{count}} contacts" },
+    "catchesCount": {
+      "one": "1 catch",
+      "other": "{{count}} catches"
+    },
+    "contactsCount": {
+      "one": "1 contact",
+      "other": "{{count}} contacts"
+    },
     "emptyTitle": "No trips yet",
     "emptyBody": "Complete your first fishing trip and it will appear here with your route, catches and conditions."
   },
@@ -307,16 +315,16 @@
     "sectionSpots": "My Spots",
     "sectionSettings": "Settings",
     "colours": {
-      "lureGreen":  "Green",
-      "lureBlue":   "Blue",
-      "lureRed":    "Red",
+      "lureGreen": "Green",
+      "lureBlue": "Blue",
+      "lureRed": "Red",
       "lureSilver": "Silver",
-      "lureGold":   "Gold",
-      "lureBlack":  "Black",
-      "lureWhite":  "White",
-      "lurePink":   "Pink",
+      "lureGold": "Gold",
+      "lureBlack": "Black",
+      "lureWhite": "White",
+      "lurePink": "Pink",
       "lureOrange": "Orange",
-      "lureBrown":  "Brown"
+      "lureBrown": "Brown"
     },
     "fishingTypes": {
       "spin": "Spinning",
@@ -374,7 +382,6 @@
     "languageSaved": "Language updated",
     "version": "Version",
     "serverStatus": "Server",
-    "yourData": "Your data",
     "eraseExplain": "Deletes every trip, catch, photo reference, lure, spot and profile detail from this phone, and withdraws the anonymous observations this phone has contributed to the Activity Map. Do this before uninstalling — once the app is gone, those contributions can no longer be withdrawn by anyone.",
     "eraseAll": "Delete all my data",
     "erasing": "Deleting…",
@@ -493,12 +500,14 @@
     "sheetCatches": "Catches",
     "sheetContacts": "Contacts",
     "tapHint": "Tap a zone to see activity.",
-    "empty": "No activity yet. Be the first!",
+    "empty": "No shared activity here yet. A zone appears once several anglers have reported from it — log your trips and it fills up.",
     "filterTitle": "Filters",
     "filterDone": "Done",
     "filterSpecies": "Species",
     "filterEventType": "Activity type",
-    "filterMapType": "Map type"
+    "filterMapType": "Map type",
+    "emptyWithOwn": "No shared activity here yet — the amber marks are your own catches. A zone appears once several anglers have reported from it.",
+    "ownLayer": "Your catches"
   },
   "errors": {
     "tripNotFound": "Trip not found",

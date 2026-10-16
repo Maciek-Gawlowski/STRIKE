@@ -353,6 +353,58 @@ export type EventLocation = {
   longitude: number;
 };
 
+export type OwnEvent = {
+  id: string;
+  type: StrikeEventType;
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+};
+
+/**
+ * The user's own positioned events, for the personal layer on the Activity
+ * Map. Nothing here touches the network: these rows have always lived on the
+ * phone. The shared layer deliberately needs several anglers in a cell before
+ * it draws anything, which is the right call for privacy but leaves a new
+ * tester staring at an empty map and concluding the app is broken. Their own
+ * catches are theirs to see from the first trip.
+ *
+ * Only positioned event types are returned — a lure change or a photo is not
+ * a place where something happened.
+ */
+export async function getOwnEventsInWindow(
+  db: SQLiteDatabase,
+  since: string,
+  until?: string | null
+): Promise<OwnEvent[]> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    type: string;
+    lat: number;
+    lng: number;
+    timestamp: string;
+  }>(
+    `SELECT id, type, lat, lng, timestamp
+     FROM events
+     WHERE type IN ('catch', 'contact', 'following')
+       AND timestamp >= ?
+       AND (? IS NULL OR timestamp <= ?)
+     ORDER BY timestamp DESC
+     LIMIT 300;`,
+    // `until` is bound twice rather than using a numbered placeholder: mixing
+    // `?` and `?2` in one statement is legal SQLite but easy to misread and
+    // easy to break when the WHERE clause changes.
+    [since, until ?? null, until ?? null]
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type as StrikeEventType,
+    latitude: row.lat,
+    longitude: row.lng,
+    timestamp: row.timestamp
+  }));
+}
+
 /**
  * Events that have no weather snapshot yet (e.g. created while offline).
  * Used by the background weather sync to back-fill conditions once online.

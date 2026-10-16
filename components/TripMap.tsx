@@ -7,6 +7,8 @@ import type { Coordinate, StrikeEvent } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Colors } from "@/theme/colors";
+// Shared with the Activity Map so one catch looks the same on both.
+import { EVENT_MARKER_COLORS as markerColors, EVENT_MARKER_ICONS as markerIcons } from "@/components/eventMarkers";
 
 type TripMapProps = {
   route: Coordinate[];
@@ -24,22 +26,9 @@ type TripMapProps = {
   replayTick?: number;
 };
 
-const markerColors = {
-  contact:   "#f4c84f",
-  following: "#5AA9E6",
-  catch:     Colors.catchGreen,
-  photo:     "#9B59B6",
-};
-
-const markerIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
-  contact:   "flash-outline",
-  following: "eye-outline",
-  catch:     "fish-outline",
-  photo:     "camera-outline",
-};
 
 function EventPin({ type }: { type: string }) {
-  const color = markerColors[type as keyof typeof markerColors] ?? "#ffffff";
+  const color = markerColors[type] ?? "#ffffff";
   const icon  = markerIcons[type] ?? "ellipse-outline";
   return (
     <View style={[pin.shell, { backgroundColor: color, borderColor: "rgba(255,255,255,0.55)" }]}>

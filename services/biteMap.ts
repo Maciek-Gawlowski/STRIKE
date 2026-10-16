@@ -76,6 +76,16 @@ export async function uploadBiteMapEvent(
 ): Promise<void> {
   try {
     if (!supabase) return;
+    // Development runs never write to the shared map. Every Expo Go session
+    // was pushing test events into the same table real anglers' observations
+    // live in, with nothing to tell the two apart afterwards — a handful of
+    // catches logged at a desk in one city is noise on everyone else's map and
+    // quietly inflates any count we ever quote. The upload path itself is
+    // still exercised by TestFlight builds, which is where it gets verified.
+    if (__DEV__) {
+      console.log("[strike/bitemap] upload skipped — development build");
+      return;
+    }
     const timestamp = new Date(event.timestamp);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("bite_map_events") as any).insert({

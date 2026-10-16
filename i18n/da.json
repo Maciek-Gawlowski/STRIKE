@@ -140,7 +140,7 @@
     "locationPrimeBody": "Til at tegne din rute og placere hver fangst på kortet. Dine præcise positioner bliver på denne telefon — kun et groft område deles. iOS spørger om lidt; siger du nej, spørger den ikke igen, og appen kan intet optage.",
     "locationPrimeBtn": "Fortsæt",
     "locationDeniedBody": "Uden adgang til din position kan turen ikke tegne ruten, og dine fangster bliver ikke placeret på kortet. Giv adgang under Indstillinger, og start turen igen.",
-    "locationDeniedOpenSettings": "\u00c5bn Indstillinger",
+    "locationDeniedOpenSettings": "Åbn Indstillinger",
     "longRunningTitle": "Fisker du stadig?",
     "longRunningBody": "Din tur har kørt i over 6 timer. Fortsæt eller stop og gem den i logbogen.",
     "longRunningContinue": "Fisker stadig",
@@ -187,7 +187,9 @@
       "suder": "Suder",
       "karpe": "Karpe",
       "other": "Anden art"
-    }
+    },
+    "whatDidYouCatch": "Hvad fangede du?",
+    "moreDetails": "Flere detaljer"
   },
   "catchDetail": {
     "kicker": "FANGSTDETALJER",
@@ -229,8 +231,14 @@
   "logbook": {
     "kicker": "LOKAL LOGBOG",
     "title": "Tidligere ture",
-    "catchesCount": { "one": "1 fangst", "other": "{{count}} fangster" },
-    "contactsCount": { "one": "1 hug", "other": "{{count}} hug" },
+    "catchesCount": {
+      "one": "1 fangst",
+      "other": "{{count}} fangster"
+    },
+    "contactsCount": {
+      "one": "1 hug",
+      "other": "{{count}} hug"
+    },
     "emptyTitle": "Ingen ture endnu",
     "emptyBody": "Gennemfør din første fiskertur og den vil dukke op her med din rute, fangster og forhold."
   },
@@ -307,16 +315,16 @@
     "sectionSpots": "Mine spots",
     "sectionSettings": "Indstillinger",
     "colours": {
-      "lureGreen":  "Grøn",
-      "lureBlue":   "Blå",
-      "lureRed":    "Rød",
+      "lureGreen": "Grøn",
+      "lureBlue": "Blå",
+      "lureRed": "Rød",
       "lureSilver": "Sølv",
-      "lureGold":   "Guld",
-      "lureBlack":  "Sort",
-      "lureWhite":  "Hvid",
-      "lurePink":   "Pink",
+      "lureGold": "Guld",
+      "lureBlack": "Sort",
+      "lureWhite": "Hvid",
+      "lurePink": "Pink",
       "lureOrange": "Orange",
-      "lureBrown":  "Brun"
+      "lureBrown": "Brun"
     },
     "fishingTypes": {
       "spin": "Spinnefiskeri",
@@ -374,7 +382,6 @@
     "languageSaved": "Sprog opdateret",
     "version": "Version",
     "serverStatus": "Server",
-    "yourData": "Dine data",
     "eraseExplain": "Sletter alle ture, fangster, billedhenvisninger, agn, pladser og profiloplysninger fra denne telefon og trækker de anonyme observationer tilbage, som telefonen har bidraget med til Aktivitetskortet. Gør det, før du afinstallerer — når appen er væk, kan de bidrag ikke længere trækkes tilbage af nogen.",
     "eraseAll": "Slet alle mine data",
     "erasing": "Sletter…",
@@ -493,12 +500,14 @@
     "sheetCatches": "Fangster",
     "sheetContacts": "Kontakter",
     "tapHint": "Tryk på en zone for at se aktivitet.",
-    "empty": "Ingen aktivitet endnu. Vær den første!",
+    "empty": "Ingen fælles aktivitet her endnu. Et felt dukker op, når flere fiskere har meldt fra det — log dine ture, så fyldes kortet.",
     "filterTitle": "Filtre",
     "filterDone": "Færdig",
     "filterSpecies": "Art",
     "filterEventType": "Aktivitetstype",
-    "filterMapType": "Korttype"
+    "filterMapType": "Korttype",
+    "emptyWithOwn": "Ingen fælles aktivitet her endnu — de gule mærker er dine egne fangster. Et felt dukker op, når flere fiskere har meldt fra det.",
+    "ownLayer": "Dine fangster"
   },
   "errors": {
     "tripNotFound": "Tur ikke fundet",

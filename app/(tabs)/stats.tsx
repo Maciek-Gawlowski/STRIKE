@@ -13,6 +13,7 @@ import { useStrikeStore } from "@/store/useStrikeStore";
 import { LureColourDot } from "@/components/LureColourDot";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
+import { speciesLabel } from "@/constants/species";
 import { Fonts } from "@/theme/fonts";
 
 // ── Compass rose — catches by wind direction ──────────────────────────────────
@@ -580,13 +581,16 @@ export default function StatsScreen() {
     for (const e of allEvents) {
       if (e.type !== "catch") continue;
       const sp = e.species?.trim();
+      // Grouped by the stored key, then labelled once for display: two
+      // anglers running the app in different languages must land in the same
+      // bar, not in two bars with the same fish in them.
       if (sp) counts[sp] = (counts[sp] ?? 0) + 1;
       else unspecified += 1;
     }
     const named = Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
-      .map(([species, count]) => ({ species, count }));
+      .map(([species, count]) => ({ species: speciesLabel(species, t), count }));
     // Catches logged without a species used to be dropped silently, so this
     // list added up to less than the catch count on the same screen. They get
     // their own row instead, always last.

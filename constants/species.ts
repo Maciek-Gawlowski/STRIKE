@@ -21,3 +21,29 @@ export const ALL_SPECIES: SpeciesEntry[] = [
 
 export const FRESHWATER_SPECIES = ALL_SPECIES.filter((s) => s.water === "fresh" || s.water === "both").filter((s) => s.key !== "other");
 export const SALTWATER_SPECIES  = ALL_SPECIES.filter((s) => s.water === "salt"  || s.water === "both").filter((s) => s.key !== "other");
+
+const SPECIES_BY_KEY = new Map(ALL_SPECIES.map((entry) => [entry.key, entry]));
+
+/**
+ * A species rendered the way the angler should read it.
+ *
+ * Species are stored by KEY ("havoerred"), never by label. The same fish logged
+ * by a Dane and by someone running the app in English has to end up as one
+ * species — in the statistics, and in the Activity Map's filter, which matches
+ * on the key. Storing "Havørred" and "Sea trout" would silently split it in
+ * two.
+ *
+ * Catches from before the species picker existed carry whatever text was typed
+ * into the old free-text field. Those are shown exactly as typed rather than
+ * hidden: it is the angler's own logbook entry, and we do not get to decide it
+ * never happened.
+ */
+export function speciesLabel(
+  species: string | null | undefined,
+  t: (key: string) => string
+): string {
+  const raw = species?.trim();
+  if (!raw) return "";
+  const entry = SPECIES_BY_KEY.get(raw);
+  return entry ? t(entry.labelKey) : raw;
+}

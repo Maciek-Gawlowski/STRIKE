@@ -1,20 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Polygon } from "react-native-maps";
 import { GlassCard } from "@/components/GlassCard";
 import { GradientLegend } from "@/components/GradientLegend";
-import { HeatmapOverlay, type HeatPoint } from "@/components/HeatmapOverlay";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
 import { getDb } from "@/database/db";
 import { getBiteMapData, type BiteMapFilter, type HexActivity } from "@/services/biteMap";
-import { latLngToXY, type MapRegion } from "@/services/heatmapGeo";
+import type { MapRegion } from "@/services/heatmapGeo";
+import { cellToPolygon, latLngToCell } from "@/services/hexGrid";
+import { EVENT_MARKER_COLORS, EVENT_MARKER_ICONS, dominantEventType } from "@/components/eventMarkers";
+import { OwnEventPin } from "@/components/OwnEventPin";
 import { deleteSpot, getSpots, upsertSpot, type Spot } from "@/database/spots";
+import { getOwnEventsInWindow, type OwnEvent } from "@/database/queries";
 import { useTranslation } from "@/i18n";
 import { ALS_CENTER } from "@/services/zones";
 import { useStrikeStore } from "@/store/useStrikeStore";
@@ -80,10 +84,6 @@ function parseDMY(s: string): Date | null {
 
 type SpotForm = { id?: string; lat: number; lng: number; name: string; note: string };
 
-function lerp(min: number, max: number, t: number): number {
-  return min + (max - min) * t;
-}
-
 function subLabel(mode: TimeMode, t: (key: string) => string, customRange?: string): string {
   if (mode === "24h") return t("bitemap.sub24");
   if (mode === "30d") return t("bitemap.sub30");
@@ -103,6 +103,21 @@ function getActivityColor(total: number): string {
   if (total >= 4) return Colors.activityMid;
   if (total >= 1) return Colors.activityLow;
   return Colors.activityNone;
+}
+
+/**
+ * Fill strength per activity band, as the alpha half of an 8-digit colour.
+ *
+ * Stepped rather than continuous: four states a legend can name beat a smooth
+ * ramp nobody can read off a map. Kept deliberately light — the outline is
+ * what states the shape, and a fill heavy enough to bury the street names
+ * underneath makes the map worse at the job people actually use it for, which
+ * is working out how to get to the water.
+ */
+function cellFillAlpha(total: number): string {
+  if (total >= 9) return "5C"; // 36%
+  if (total >= 4) return "42"; // 26%
+  return "2E";                 // 18%
 }
 
 function inViewport(lat: number, lng: number, region: MapRegion): boolean {
@@ -146,11 +161,35 @@ export default function BiteMapScreen() {
 
   // Spots
   const [spots, setSpots] = useState<Spot[]>([]);
+  // The user's own events, drawn as a separate layer from the shared heat.
+  const [ownEvents, setOwnEvents] = useState<OwnEvent[]>([]);
+  /**
+   * react-native-maps snapshots a marker's child view once and reuses the
+   * bitmap. With tracksViewChanges pinned to false from the first render the
+   * snapshot is taken before the view has been laid out, so the marker draws
+   * as an empty placeholder instead of the dot. Track changes briefly after
+   * the set of markers changes, then stop — keeping it on permanently makes
+   * every pan re-render every marker.
+   */
+  const [trackOwnMarkers, setTrackOwnMarkers] = useState(true);
+  useEffect(() => {
+    setTrackOwnMarkers(true);
+    const timer = setTimeout(() => setTrackOwnMarkers(false), 1000);
+    return () => clearTimeout(timer);
+  }, [ownEvents]);
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [spotForm, setSpotForm] = useState<SpotForm | null>(null);
 
   const [initialMapRegion] = useState<MapRegion>(() => {
-    const loc = useStrikeStore.getState().currentLocation;
+    // Only a real GPS fix may seed the map. `currentLocation` is pre-seeded with
+    // a demo point near Stevns so the trip screen has something to draw before
+    // any fix exists; reading it here opened every fresh install on a coast
+    // hundreds of kilometres from the user, which is exactly what a tester
+    // reports as "the map shows the wrong country". Als is the honest default
+    // for this beta — and the effect below moves to the real position as soon
+    // as there is one.
+    const { currentLocation, hasGpsFix } = useStrikeStore.getState();
+    const loc = hasGpsFix ? currentLocation : null;
     return {
       latitude: loc?.latitude ?? ALS_CENTER.latitude,
       longitude: loc?.longitude ?? ALS_CENTER.longitude,
@@ -158,6 +197,49 @@ export default function BiteMapScreen() {
       longitudeDelta: INITIAL_LAT_DELTA
     };
   });
+
+  // Centre on the user's real position when the map opens. Permission is only
+  // read here, never requested: TripWatcher owns that flow, including the
+  // priming alert that explains why STRIKE wants location. Asking from two
+  // places would put the system dialog in front of the user with no
+  // explanation attached.
+  const [showUserLocation, setShowUserLocation] = useState(false);
+  const spotParamsRef = useRef({ spotLat, spotLng });
+  spotParamsRef.current = { spotLat, spotLng };
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (!mounted || permission.status !== "granted") return;
+        setShowUserLocation(true);
+        // Don't fight the deep link from "Mine spots", which is already
+        // animating the map somewhere the user explicitly asked for.
+        if (spotParamsRef.current.spotLat && spotParamsRef.current.spotLng) return;
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced
+        });
+        if (!mounted) return;
+        mapRef.current?.animateToRegion(
+          {
+            latitude: current.coords.latitude,
+            longitude: current.coords.longitude,
+            latitudeDelta: INITIAL_LAT_DELTA,
+            longitudeDelta: INITIAL_LAT_DELTA
+          },
+          600
+        );
+      } catch {
+        // No fix available (airplane mode, indoors with location services off).
+        // The map stays on its initial region rather than showing an error the
+        // user can do nothing about.
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const [liveRegion, setLiveRegion] = useState<MapRegion>(initialMapRegion);
 
@@ -177,6 +259,24 @@ export default function BiteMapScreen() {
     };
     const data = await getBiteMapData(filter);
     setHexes(data);
+
+    // The personal layer uses the same window as the shared one, so the two
+    // always describe the same stretch of time. It is read straight from the
+    // local database and never filtered by species or event type: those
+    // filters exist to narrow other people's activity, and silently hiding
+    // the user's own catches behind them is how the map came to look empty
+    // in the first place.
+    try {
+      const db = await getDb();
+      const own = await getOwnEventsInWindow(db, filter.since, filter.until ?? null);
+      console.log(`[strike/map] personal layer: ${own.length} own events since ${filter.since}`);
+      setOwnEvents(own);
+    } catch (error) {
+      // A failed local read must not blank the shared map — but it must not be
+      // invisible either. A silent catch around a database read is how this
+      // project hid a schema mismatch for weeks while the app looked fine.
+      console.warn("[strike/map] personal layer read failed", error);
+    }
   }, []);
 
   // Restore sticky filter prefs on mount
@@ -231,35 +331,58 @@ export default function BiteMapScreen() {
   const visibleActivity = hexes.filter((h) => h.total >= MIN_CELL_OBSERVATIONS).length;
   const selectedHex = hexes.find((h) => h.h3_cell === selectedCell) ?? null;
 
-  const hexPositions = useMemo(() => {
-    if (mapSize.width === 0 || mapSize.height === 0) return [];
+  /**
+   * The visible cells, as real hexagons.
+   *
+   * This replaced a blurred SVG layer drawn on top of the map. The blur had to
+   * guess a radius in pixels from the zoom level, which meant it either
+   * vanished or smeared across ground nobody had fished, and at the handful of
+   * observations this beta will have for months it read as a smudge rather
+   * than as data. A polygon takes map coordinates, so the map draws the cell
+   * the server actually reported — no pixel maths, no zoom multiplier, and the
+   * shape always covers exactly the right ground.
+   */
+  const cellPolygons = useMemo(() => {
+    if (liveRegion.latitudeDelta > MAX_LAT_DELTA_FOR_OVERLAY) return [];
     return hexes
+      .filter((hex) => hex.total >= MIN_CELL_OBSERVATIONS)
       .filter((hex) => inViewport(hex.lat, hex.lng, liveRegion))
       .map((hex) => ({
         cell: hex.h3_cell,
-        ...latLngToXY(hex.lat, hex.lng, liveRegion, mapSize.width, mapSize.height)
+        total: hex.total,
+        coordinates: cellToPolygon(hex.h3_cell),
+        color: getActivityColor(hex.total),
+        alpha: cellFillAlpha(hex.total)
       }));
-  }, [hexes, mapSize, liveRegion]);
+  }, [hexes, liveRegion]);
 
-  const heatPoints: HeatPoint[] = useMemo(() => {
-    if (liveRegion.latitudeDelta > MAX_LAT_DELTA_FOR_OVERLAY) return [];
-    if (mapSize.width === 0 || mapSize.height === 0) return [];
-
-    const sizeScale = timeMode === "30d" ? 1.25 : timeMode === "7d" ? 1.15 : 1;
-    const zoomScale = INITIAL_LAT_DELTA / liveRegion.latitudeDelta;
-
-    return hexPositions
-      .map((pos) => {
-        const total = hexes.find((h) => h.h3_cell === pos.cell)?.total ?? 0;
-        const value = Math.min(total / 9, 1);
-        return { ...pos, total, value };
-      })
-      .filter((p) => p.total >= MIN_CELL_OBSERVATIONS)
-      .map((point, idx) => {
-        const radius = lerp(35, 90, point.value) * sizeScale * zoomScale;
-        return { id: idx, x: point.x, y: point.y, rx: radius, ry: radius, value: point.value };
-      });
-  }, [hexPositions, hexes, timeMode, mapSize, liveRegion]);
+  /**
+   * The angler's own events, grouped by the cell they fall in. Five catches on
+   * one beach drew five pins stacked on each other, which reads as a single
+   * pin and throws away the count — the one number that says "this spot keeps
+   * producing". One pin per cell, carrying how many.
+   */
+  const ownClusters = useMemo(() => {
+    const byCell = new Map<string, { lat: number; lng: number; types: string[] }>();
+    for (const event of ownEvents) {
+      const cell = latLngToCell(event.latitude, event.longitude);
+      const entry = byCell.get(cell) ?? { lat: 0, lng: 0, types: [] };
+      entry.lat += event.latitude;
+      entry.lng += event.longitude;
+      entry.types.push(event.type);
+      byCell.set(cell, entry);
+    }
+    return Array.from(byCell.entries()).map(([cell, entry]) => ({
+      cell,
+      // The members' average position, not the cell centre. These are the
+      // user's own events shown only to them, so there is nothing to coarsen:
+      // they already know which rock they were standing on.
+      latitude: entry.lat / entry.types.length,
+      longitude: entry.lng / entry.types.length,
+      count: entry.types.length,
+      type: dominantEventType(entry.types)
+    }));
+  }, [ownEvents]);
 
   // Top 8 hex cells by activity — rendered as numbered markers
   const hotspots = useMemo(
@@ -340,7 +463,12 @@ export default function BiteMapScreen() {
       <View style={styles.titleBlock}>
         <Text style={styles.kicker}>{t("bitemap.kicker")}</Text>
         <Text style={styles.title}>{t("bitemap.title")}</Text>
-        <Text style={styles.subtitle}>{subLabel(timeMode, t, customSince && customUntil ? `${customFrom} – ${customTo}` : undefined)}</Text>
+        <Text style={styles.subtitle}>
+          {subLabel(timeMode, t, customSince && customUntil ? `${customFrom} – ${customTo}` : undefined)}
+          {__DEV__
+            ? `  ·  own:${ownEvents.length} clusters:${ownClusters.map((c) => `${c.type}x${c.count}`).join(" ")}`
+            : ""}
+        </Text>
       </View>
 
       {/* Time window + filter button — single control row */}
@@ -389,11 +517,18 @@ export default function BiteMapScreen() {
           ref={mapRef}
           style={StyleSheet.absoluteFill}
           initialRegion={initialMapRegion}
-          mapType={mapType}
+          // customMapStyle is a Google Maps feature and does nothing on iOS,
+          // which is why every Apple POI — hospitals, parks, shopping centres —
+          // was still painted at full saturation over the activity layer.
+          // mutedStandard is Apple's own toned-down style and is the only
+          // lever that works there; the custom style stays for Android.
+          mapType={mapType === "standard" ? "mutedStandard" : mapType}
           customMapStyle={mapType === "standard" ? mapStyle : undefined}
+          showsPointsOfInterest={false}
           rotateEnabled={false}
           pitchEnabled={false}
           showsCompass={false}
+          showsUserLocation={showUserLocation}
           onRegionChangeComplete={(region) => setLiveRegion(region)}
           onPress={handleMapPress}
         >
@@ -413,6 +548,41 @@ export default function BiteMapScreen() {
               </View>
             </Marker>
           ))}
+          {/*
+            The user's own events. Deliberately small, deliberately not heat:
+            this layer answers "where have I been" and must never be mistaken
+            for community activity, which is what the blobs and the numbered
+            badges are for. A filled dot is a catch, a ring is a contact or a
+            follow.
+          */}
+          {cellPolygons.map((cell) => (
+            <Polygon
+              key={`cell-${cell.cell}`}
+              coordinates={cell.coordinates}
+              fillColor={`${cell.color}${cell.alpha}`}
+              strokeColor={cell.color}
+              strokeWidth={cell.total >= 9 ? 2.5 : 2}
+              tappable
+              onPress={() => {
+                // The cell is a real shape now, so it can answer for itself.
+                // handleMapPress still guesses the nearest cell from a tap on
+                // bare map, for the gap between two drawn cells.
+                setSelectedSpot(null);
+                setSpotForm(null);
+                setSelectedCell(cell.cell);
+              }}
+            />
+          ))}
+          {ownClusters.map((cluster) => (
+            <Marker
+              key={`own-${cluster.cell}`}
+              coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={trackOwnMarkers}
+            >
+              <OwnEventPin type={cluster.type} count={cluster.count} />
+            </Marker>
+          ))}
           {hotspots.map((hex) => {
             const ringColor = hex.total >= 9 ? "#FF3800" : hex.total >= 4 ? "#F4C84F" : "#35D48F";
             return (
@@ -430,10 +600,6 @@ export default function BiteMapScreen() {
           })}
         </MapView>
       </ErrorBoundary>
-        {/* Heatmap overlay — touch passes through */}
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <HeatmapOverlay width={mapSize.width} height={mapSize.height} points={heatPoints} />
-        </View>
         {/* Crosshair — marks the map centre used by "Save map centre as spot" */}
         <View style={styles.crosshair} pointerEvents="none">
           <View style={styles.crosshairH} />
@@ -549,10 +715,22 @@ export default function BiteMapScreen() {
         <Text style={styles.hint}>{t("bitemap.tapHint")}</Text>
       )}
 
+      {/* An amber dot on the map means nothing until it is named once. */}
+      {ownEvents.length > 0 ? (
+        <View style={styles.ownLayerKey}>
+          <View style={[styles.ownLayerChip, { backgroundColor: EVENT_MARKER_COLORS.catch }]}>
+            <Ionicons name={EVENT_MARKER_ICONS.catch} size={11} color="#fff" />
+          </View>
+          <Text style={styles.ownLayerKeyText}>{t("bitemap.ownLayer")}</Text>
+        </View>
+      ) : null}
+
       {!loading && (totalActivity === 0 || visibleActivity === 0) ? (
         <GlassCard style={styles.emptyCard}>
           <Ionicons name="fish-outline" size={28} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>{t("bitemap.empty")}</Text>
+          <Text style={styles.emptyText}>
+            {ownEvents.length > 0 ? t("bitemap.emptyWithOwn") : t("bitemap.empty")}
+          </Text>
         </GlassCard>
       ) : null}
 
@@ -1088,6 +1266,29 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   // ── Hotspot numbered markers ──
+  ownLayerKey: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "center",
+    marginTop: 6
+  },
+  ownLayerKeyText: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.textMuted
+  },
+  // The legend's miniature of the pin itself — same icon, same colour, just
+  // small enough to sit next to a line of text.
+  ownLayerChip: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.25,
+    borderColor: "rgba(255,255,255,0.55)"
+  },
   hotspotCircle: {
     width: 40,
     height: 40,

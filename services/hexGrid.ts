@@ -22,7 +22,7 @@
 
 const METERS_PER_DEG_LAT = 111_320;
 /** Hex circumradius ≈ H3 res-8 edge length. */
-const CELL_RADIUS_M = 461;
+export const CELL_RADIUS_M = 461;
 /** Circumradius expressed in degrees of latitude. */
 const SIZE_DEG = CELL_RADIUS_M / METERS_PER_DEG_LAT; // ≈ 0.004142
 const DEG_TO_RAD = Math.PI / 180;
@@ -73,6 +73,42 @@ export function latLngToCell(lat: number, lng: number): string {
  * Return the centre lat/lng of the hex cell identified by `cell`.
  * The cell argument must be a value previously returned by latLngToCell.
  */
+/**
+ * The six corners of a cell, in order, ready to hand to a map Polygon.
+ *
+ * The corners are computed in the grid's own normalised space and projected
+ * back the same way the centre is, so a corner shared by two neighbouring
+ * cells comes out at exactly the same coordinate from either side: the cells
+ * tile with no seams and no overlap. Drawing the real cell is what lets the
+ * map stop guessing a blob radius in pixels.
+ *
+ * In normalised space the hex has a circumradius of 1 and is pointy-top, so
+ * its corners sit at the top and bottom and at the four (±√3/2, ±1/2) points.
+ */
+const HEX_CORNERS: ReadonlyArray<readonly [number, number]> = [
+  [0, 1],
+  [SQRT3 / 2, 0.5],
+  [SQRT3 / 2, -0.5],
+  [0, -1],
+  [-SQRT3 / 2, -0.5],
+  [-SQRT3 / 2, 0.5]
+];
+
+export function cellToPolygon(cell: string): Array<{ latitude: number; longitude: number }> {
+  const comma = cell.indexOf(",");
+  const q = parseInt(cell.slice(0, comma), 10);
+  const r = parseInt(cell.slice(comma + 1), 10);
+  const x = SQRT3 * q + (SQRT3 / 2) * r;
+  const y = (3 / 2) * r;
+  return HEX_CORNERS.map(([dx, dy]) => {
+    const lat = (y + dy) * SIZE_DEG;
+    return {
+      latitude: lat,
+      longitude: ((x + dx) * SIZE_DEG) / Math.cos(lat * DEG_TO_RAD)
+    };
+  });
+}
+
 export function cellToLatLng(cell: string): { lat: number; lng: number } {
   const comma = cell.indexOf(",");
   const q = parseInt(cell.slice(0, comma), 10);
