@@ -9,8 +9,9 @@ import { ActionButton } from "@/components/ActionButton";
 import { LureColourDot } from "@/components/LureColourDot";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
+import { SpeciesPrompt } from "@/components/SpeciesPrompt";
 import { TripMap } from "@/components/TripMap";
-import { formatDistance, formatDuration, useStrikeStore } from "@/store/useStrikeStore";
+import { formatDistance, formatDuration, useStrikeStore, type StrikeEvent } from "@/store/useStrikeStore";
 import { getDb } from "@/database/db";
 import { getLures, type Lure } from "@/database/lures";
 import { useTranslation } from "@/i18n";
@@ -32,6 +33,7 @@ export default function MapScreen() {
   const currentLocation = useStrikeStore((state) => state.currentLocation);
   const addEvent = useStrikeStore((state) => state.addEvent);
   const addCatch = useStrikeStore((state) => state.addCatch);
+  const updateEvent = useStrikeStore((state) => state.updateEvent);
   const stopTrip = useStrikeStore((state) => state.stopTrip);
   const mapType = useStrikeStore((state) => state.mapType);
   const setMapType = useStrikeStore((state) => state.setMapType);
@@ -41,6 +43,7 @@ export default function MapScreen() {
   const [now, setNow] = useState(Date.now());
   const [lures, setLures] = useState<Lure[]>([]);
   const [lurePickerOpen, setLurePickerOpen] = useState(false);
+  const [speciesPrompt, setSpeciesPrompt] = useState<StrikeEvent | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -58,7 +61,11 @@ export default function MapScreen() {
 
   const handleCatch = async () => {
     if (!activeTrip) return;
-    addCatch({
+    // The catch is written first and the species asked for afterwards. Pressing
+    // the button with a fish in one hand has to record something immediately —
+    // if the species were a required step before saving, the honest outcome on
+    // a windy beach is that nothing gets logged at all.
+    const created = addCatch({
       species: "",
       comment: "",
       kept: false,
@@ -72,6 +79,19 @@ export default function MapScreen() {
       Animated.delay(320),
       Animated.timing(celebAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
+    if (created) setSpeciesPrompt(created);
+  };
+
+  /**
+   * Attaches a species to the catch that was just logged. `resyncBiteMap` is
+   * what pushes the corrected species to the shared map — the row went up the
+   * moment the catch was created, carrying no species at all.
+   */
+  const confirmSpecies = (key: string) => {
+    const event = speciesPrompt;
+    setSpeciesPrompt(null);
+    if (!event || !activeTrip) return;
+    updateEvent(activeTrip.id, { ...event, species: key }, { resyncBiteMap: true });
   };
 
   const handlePhoto = async () => {
@@ -233,6 +253,17 @@ export default function MapScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <SpeciesPrompt
+        event={speciesPrompt}
+        onPick={confirmSpecies}
+        onDismiss={() => setSpeciesPrompt(null)}
+        onMoreDetails={() => {
+          const event = speciesPrompt;
+          setSpeciesPrompt(null);
+          if (event) router.push(`/event/${event.id}`);
+        }}
+      />
 
     </Screen>
   );

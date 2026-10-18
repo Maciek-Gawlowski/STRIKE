@@ -11,6 +11,7 @@ import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { GlassCard } from "@/components/GlassCard";
 import { LureColourDot } from "@/components/LureColourDot";
 import { Screen } from "@/components/Screen";
+import { SpeciesPrompt } from "@/components/SpeciesPrompt";
 import { SectionHeader } from "@/components/SectionHeader";
 import { StatCard } from "@/components/StatCard";
 import { TripMap } from "@/components/TripMap";
@@ -29,7 +30,6 @@ import { getLures, type Lure } from "@/database/lures";
 import { formatWind } from "@/services/weather";
 import { timeOfDayKey } from "@/services/tripName";
 import { getStreakData, type StreakData } from "@/services/statistics";
-import { SALTWATER_SPECIES } from "@/constants/species";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
@@ -632,54 +632,19 @@ export default function HomeScreen() {
         <Text style={styles.celebText}>{t("events.catch")}</Text>
       </Animated.View>
 
-      {/* ── Species prompt — opens by itself after a catch is logged ── */}
-      <Modal
-        visible={speciesPrompt !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSpeciesPrompt(null)}
-      >
-        {/* Tapping outside dismisses without a species. The catch is already
-            saved, so skipping costs the angler nothing but the detail. */}
-        <Pressable style={styles.modalScrim} onPress={() => setSpeciesPrompt(null)}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t("catch.whatDidYouCatch")}</Text>
-            <View style={styles.speciesGrid}>
-              {SALTWATER_SPECIES.map((sp) => (
-                <Pressable
-                  key={sp.key}
-                  style={styles.speciesChip}
-                  onPress={() => confirmSpecies(sp.key)}
-                >
-                  <Text style={styles.speciesChipText} numberOfLines={1}>
-                    {t(sp.labelKey as never)}
-                  </Text>
-                </Pressable>
-              ))}
-              <Pressable style={styles.speciesChip} onPress={() => confirmSpecies("other")}>
-                <Text style={styles.speciesChipText} numberOfLines={1}>
-                  {t("catch.speciesList.other")}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={styles.speciesFooter}>
-              <Pressable
-                hitSlop={8}
-                onPress={() => {
-                  const event = speciesPrompt;
-                  setSpeciesPrompt(null);
-                  if (event) router.push(`/event/${event.id}`);
-                }}
-              >
-                <Text style={styles.speciesMoreText}>{t("catch.moreDetails")}</Text>
-              </Pressable>
-              <Pressable hitSlop={8} onPress={() => setSpeciesPrompt(null)}>
-                <Text style={styles.speciesSkipText}>{t("common.skip")}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Pressable>
-      </Modal>
+      {/* Species prompt. Shared with the trip map so the two catch buttons
+          can never again ask different questions — or, as in build 38, only
+          one of them ask at all. */}
+      <SpeciesPrompt
+        event={speciesPrompt}
+        onPick={confirmSpecies}
+        onDismiss={() => setSpeciesPrompt(null)}
+        onMoreDetails={() => {
+          const event = speciesPrompt;
+          setSpeciesPrompt(null);
+          if (event) router.push(`/event/${event.id}`);
+        }}
+      />
 
       {/* ── Lure change modal ── */}
       <Modal visible={lureChangeOpen} transparent animationType="fade" onRequestClose={() => setLureChangeOpen(false)}>

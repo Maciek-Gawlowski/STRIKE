@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -76,36 +76,41 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
 
-  const event = useStrikeStore((state) => {
-    for (const trip of [state.activeTrip, ...state.trips]) {
-      if (!trip) continue;
-      const found = trip.events.find((e) => e.id === id);
-      if (found) return found;
+  /**
+   * The trip holding this event. Everything else on this screen is derived
+   * from it rather than selected separately.
+   *
+   * This matters more than it looks. zustand v5 hands the selector's result to
+   * React's useSyncExternalStore, which compares snapshots by reference — so a
+   * selector that builds a fresh array or object on every call reports a change
+   * every single time React checks, and the screen re-renders until React gives
+   * up and tears it down. That is what the error boundary was catching: opening
+   * any catch from a trip summary, or tapping "More details" on the species
+   * prompt, took the whole screen out. A trip object is a stable reference;
+   * a filtered list of its events is not.
+   */
+  const trip = useStrikeStore((state) => {
+    for (const candidate of [state.activeTrip, ...state.trips]) {
+      if (!candidate) continue;
+      if (candidate.events.some((e) => e.id === id)) return candidate;
     }
     return null;
   });
 
-  const tripId = useStrikeStore((state) => {
-    for (const trip of [state.activeTrip, ...state.trips]) {
-      if (!trip) continue;
-      if (trip.events.some((e) => e.id === id)) return trip.id;
-    }
-    return null;
-  });
+  const tripId = trip?.id ?? null;
+  const event = useMemo(
+    () => trip?.events.find((e) => e.id === id) ?? null,
+    [trip, id]
+  );
 
   const updateEvent = useStrikeStore((state) => state.updateEvent);
   const waterLevel = useStrikeStore((state) => state.waterLevel);
 
-  // For photo events: list of catches in the same trip, used for the attach picker.
-  const tripCatches = useStrikeStore((state) => {
-    for (const trip of [state.activeTrip, ...state.trips]) {
-      if (!trip) continue;
-      if (trip.events.some((e) => e.id === id)) {
-        return trip.events.filter((e) => e.type === "catch");
-      }
-    }
-    return [];
-  });
+  // For photo events: catches in the same trip, used for the attach picker.
+  const tripCatches = useMemo(
+    () => trip?.events.filter((e) => e.type === "catch") ?? [],
+    [trip]
+  );
 
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const [lure, setLure] = useState<Lure | null>(null);
