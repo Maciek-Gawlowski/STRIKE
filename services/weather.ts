@@ -22,8 +22,31 @@ export type WeatherData = {
   airTemp: number; // °C
   windSpeed: number; // m/s
   windDirection: number; // degrees (0-360)
-  pressure: number; // hPa
+  pressure: number; // hPa, surface
   waterTemp: number | null; // °C, null for inland / unavailable
+
+  /**
+   * Everything below is optional and costs nothing extra: Open-Meteo returns it
+   * in the same two requests, as a longer comma-separated variable list. We ask
+   * for far more than the app currently displays on purpose. A condition we
+   * never requested has to be rebuilt later from a coarser archive; a condition
+   * we stored and ignored is free to start showing the day we decide to.
+   */
+  apparentTemp?: number;      // °C, "feels like"
+  humidity?: number;          // %
+  pressureMsl?: number;       // hPa at mean sea level — the one anglers quote
+  windGust?: number;          // m/s
+  cloudCover?: number;        // %
+  precipitation?: number;     // mm in the preceding hour
+  weatherCode?: number;       // WMO code
+  isDay?: number;             // 1 day, 0 night
+
+  waveHeight?: number;        // m
+  waveDirection?: number;     // degrees
+  wavePeriod?: number;        // s
+  currentVelocity?: number;   // km/h
+  currentDirection?: number;  // degrees
+  seaLevelMsl?: number;       // m above global mean sea level
 };
 
 // --- Formatting helpers -----------------------------------------------------
@@ -68,14 +91,33 @@ type ForecastResponse = {
     wind_speed_10m?: number | null;
     wind_direction_10m?: number | null;
     surface_pressure?: number | null;
+    apparent_temperature?: number | null;
+    relative_humidity_2m?: number | null;
+    pressure_msl?: number | null;
+    wind_gusts_10m?: number | null;
+    cloud_cover?: number | null;
+    precipitation?: number | null;
+    weather_code?: number | null;
+    is_day?: number | null;
   };
 };
 
 type MarineResponse = {
   current?: {
     sea_surface_temperature?: number | null;
+    wave_height?: number | null;
+    wave_direction?: number | null;
+    wave_period?: number | null;
+    ocean_current_velocity?: number | null;
+    ocean_current_direction?: number | null;
+    sea_level_height_msl?: number | null;
   };
 };
+
+/** Narrows an Open-Meteo field to a number, treating null/absent as missing. */
+function num(value: number | null | undefined): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
 
 function buildUrl(base: string, params: Record<string, string>): string {
   const query = Object.entries(params)
@@ -97,20 +139,40 @@ function buildUrl(base: string, params: Record<string, string>): string {
 const COORD_PRECISION = 3;
 const coarse = (value: number): string => value.toFixed(COORD_PRECISION);
 
-/** Sea-surface temperature is optional; failures/inland nulls resolve to null. */
-async function fetchWaterTemp(lat: number, lng: number): Promise<number | null> {
-  try {
-    const data = await fetchJson<MarineResponse>(
+const MARINE_FULL =
+  "sea_surface_temperature,wave_height,wave_direction,wave_period," +
+  "ocean_current_velocity,ocean_current_direction,sea_level_height_msl";
+
+/**
+ * Marine conditions. Optional throughout: inland coordinates and API errors
+ * both resolve to an empty object rather than throwing.
+ *
+ * The request is made twice over if it has to be. Open-Meteo rejects the whole
+ * call with a 400 if a single variable is unsupported for the chosen model, and
+ * water temperature is the one field the app already relies on — losing it
+ * because we also asked for wave period would be a bad trade. So the wide
+ * request is attempted first and a failure falls back to the narrow one.
+ */
+async function fetchMarine(lat: number, lng: number): Promise<MarineResponse["current"]> {
+  const request = (variables: string) =>
+    fetchJson<MarineResponse>(
       buildUrl(MARINE_URL, {
         latitude: coarse(lat),
         longitude: coarse(lng),
-        current: "sea_surface_temperature"
+        current: variables
       })
     );
-    const value = data.current?.sea_surface_temperature;
-    return typeof value === "number" ? value : null;
+
+  try {
+    const data = await request(MARINE_FULL);
+    return data.current ?? {};
   } catch {
-    return null;
+    try {
+      const data = await request("sea_surface_temperature");
+      return data.current ?? {};
+    } catch {
+      return {};
+    }
   }
 }
 
@@ -121,16 +183,19 @@ async function fetchWaterTemp(lat: number, lng: number): Promise<number | null> 
  */
 export async function fetchWeather(lat: number, lng: number): Promise<WeatherData | null> {
   try {
-    const [forecast, waterTemp] = await Promise.all([
+    const [forecast, marine] = await Promise.all([
       fetchJson<ForecastResponse>(
         buildUrl(FORECAST_URL, {
           latitude: coarse(lat),
           longitude: coarse(lng),
-          current: "temperature_2m,wind_speed_10m,wind_direction_10m,surface_pressure",
+          current:
+            "temperature_2m,wind_speed_10m,wind_direction_10m,surface_pressure," +
+            "apparent_temperature,relative_humidity_2m,pressure_msl,wind_gusts_10m," +
+            "cloud_cover,precipitation,weather_code,is_day",
           wind_speed_unit: "ms"
         })
       ),
-      fetchWaterTemp(lat, lng)
+      fetchMarine(lat, lng)
     ]);
 
     const current = forecast.current;
@@ -149,7 +214,23 @@ export async function fetchWeather(lat: number, lng: number): Promise<WeatherDat
       windSpeed: current.wind_speed_10m,
       windDirection: current.wind_direction_10m,
       pressure: current.surface_pressure,
-      waterTemp
+      waterTemp: num(marine?.sea_surface_temperature) ?? null,
+
+      apparentTemp: num(current.apparent_temperature),
+      humidity: num(current.relative_humidity_2m),
+      pressureMsl: num(current.pressure_msl),
+      windGust: num(current.wind_gusts_10m),
+      cloudCover: num(current.cloud_cover),
+      precipitation: num(current.precipitation),
+      weatherCode: num(current.weather_code),
+      isDay: num(current.is_day),
+
+      waveHeight: num(marine?.wave_height),
+      waveDirection: num(marine?.wave_direction),
+      wavePeriod: num(marine?.wave_period),
+      currentVelocity: num(marine?.ocean_current_velocity),
+      currentDirection: num(marine?.ocean_current_direction),
+      seaLevelMsl: num(marine?.sea_level_height_msl)
     };
   } catch {
     // Offline / API error — weather is optional, so never throw.
@@ -178,7 +259,23 @@ function toSnapshot(
     // nothing: a tide measured days after the catch is not that catch's tide,
     // and a wrong value is worse here than a missing one.
     waterLevel: water?.level,
-    waterLevelTrend: water?.trend
+    waterLevelTrend: water?.trend,
+
+    apparentTemp: data.apparentTemp,
+    humidity: data.humidity,
+    pressureMsl: data.pressureMsl,
+    windGust: data.windGust,
+    cloudCover: data.cloudCover,
+    precipitation: data.precipitation,
+    weatherCode: data.weatherCode,
+    isDay: data.isDay,
+
+    waveHeight: data.waveHeight,
+    waveDirection: data.waveDirection,
+    wavePeriod: data.wavePeriod,
+    currentVelocity: data.currentVelocity,
+    currentDirection: data.currentDirection,
+    seaLevelMsl: data.seaLevelMsl
   };
 }
 

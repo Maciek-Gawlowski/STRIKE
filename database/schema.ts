@@ -53,9 +53,12 @@ import type { SQLiteDatabase } from "expo-sqlite";
  *         every catch logged from now on carries its water level, and the
  *         analysis built on top of it later starts with real history instead of
  *         an empty column.
+ *  v18 -> weather_snapshots gains the fourteen conditions Open-Meteo already
+ *         returned but we never asked for (gusts, cloud, precipitation, waves,
+ *         currents, sea level, MSL pressure). Stored, not yet displayed.
  */
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 export const CREATE_TRIPS_TABLE = `
   CREATE TABLE IF NOT EXISTS trips (
@@ -388,6 +391,44 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       await db.execAsync("ALTER TABLE weather_snapshots ADD COLUMN water_level_trend TEXT;");
     }
     current = 17;
+  }
+
+  // v18: the rest of the conditions Open-Meteo already returns.
+  //
+  // Up to here a catch was stamped with five values because five were what the
+  // request asked for — not because the other fifteen were judged unhelpful.
+  // They arrive in the same two calls at no extra cost, and the asymmetry
+  // matters: a column added today starts filling from today, while a condition
+  // nobody requested at the moment of the catch can afterwards only be guessed
+  // at from a coarser archive. So these are stored whether or not any screen
+  // reads them yet, and most of them currently do not.
+  //
+  // Moon phase is deliberately absent. It follows from the event's timestamp
+  // alone and can be computed exactly, for every catch ever logged, whenever a
+  // screen wants it — storing it would only be a slower way to be wrong.
+  if (current < 18) {
+    const columns: Array<[string, string]> = [
+      ["apparent_temp", "REAL"],
+      ["humidity", "REAL"],
+      ["pressure_msl", "REAL"],
+      ["wind_gust", "REAL"],
+      ["cloud_cover", "REAL"],
+      ["precipitation", "REAL"],
+      ["weather_code", "INTEGER"],
+      ["is_day", "INTEGER"],
+      ["wave_height", "REAL"],
+      ["wave_direction", "REAL"],
+      ["wave_period", "REAL"],
+      ["current_velocity", "REAL"],
+      ["current_direction", "REAL"],
+      ["sea_level_msl", "REAL"]
+    ];
+    for (const [name, type] of columns) {
+      if (!(await columnExists(db, "weather_snapshots", name))) {
+        await db.execAsync(`ALTER TABLE weather_snapshots ADD COLUMN ${name} ${type};`);
+      }
+    }
+    current = 18;
   }
 
   if (current !== SCHEMA_VERSION) {

@@ -53,6 +53,25 @@ export type WeatherSnapshot = {
   waterLevel?: number;
   /** "rising" | "falling" | "stable" — the direction anglers actually ask about. */
   waterLevelTrend?: string;
+
+  // Captured from the same two API calls as the fields above and stored whether
+  // or not any screen shows them yet. Collecting is cheap and one-way: a
+  // condition not asked for at the moment of the catch can only ever be
+  // approximated afterwards from a coarser archive.
+  apparentTemp?: number;
+  humidity?: number;
+  pressureMsl?: number;
+  windGust?: number;
+  cloudCover?: number;
+  precipitation?: number;
+  weatherCode?: number;
+  isDay?: number;
+  waveHeight?: number;
+  waveDirection?: number;
+  wavePeriod?: number;
+  currentVelocity?: number;
+  currentDirection?: number;
+  seaLevelMsl?: number;
 };
 
 // --- Mappers ----------------------------------------------------------------
@@ -427,8 +446,15 @@ export async function insertWeatherSnapshot(
   snapshot: WeatherSnapshot
 ): Promise<void> {
   await db.runAsync(
-    `INSERT INTO weather_snapshots (id, event_id, air_temp, water_temp, wind_speed, wind_direction, pressure, water_level, water_level_trend)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO weather_snapshots (
+       id, event_id, air_temp, water_temp, wind_speed, wind_direction, pressure,
+       water_level, water_level_trend,
+       apparent_temp, humidity, pressure_msl, wind_gust, cloud_cover,
+       precipitation, weather_code, is_day,
+       wave_height, wave_direction, wave_period,
+       current_velocity, current_direction, sea_level_msl
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        event_id = excluded.event_id,
        air_temp = excluded.air_temp,
@@ -438,7 +464,21 @@ export async function insertWeatherSnapshot(
        pressure = excluded.pressure,
        -- Never overwrite a real reading with the null a later back-fill carries.
        water_level = COALESCE(excluded.water_level, water_level),
-       water_level_trend = COALESCE(excluded.water_level_trend, water_level_trend);`,
+       water_level_trend = COALESCE(excluded.water_level_trend, water_level_trend),
+       apparent_temp = COALESCE(excluded.apparent_temp, apparent_temp),
+       humidity = COALESCE(excluded.humidity, humidity),
+       pressure_msl = COALESCE(excluded.pressure_msl, pressure_msl),
+       wind_gust = COALESCE(excluded.wind_gust, wind_gust),
+       cloud_cover = COALESCE(excluded.cloud_cover, cloud_cover),
+       precipitation = COALESCE(excluded.precipitation, precipitation),
+       weather_code = COALESCE(excluded.weather_code, weather_code),
+       is_day = COALESCE(excluded.is_day, is_day),
+       wave_height = COALESCE(excluded.wave_height, wave_height),
+       wave_direction = COALESCE(excluded.wave_direction, wave_direction),
+       wave_period = COALESCE(excluded.wave_period, wave_period),
+       current_velocity = COALESCE(excluded.current_velocity, current_velocity),
+       current_direction = COALESCE(excluded.current_direction, current_direction),
+       sea_level_msl = COALESCE(excluded.sea_level_msl, sea_level_msl);`,
     [
       snapshot.id,
       snapshot.eventId,
@@ -448,7 +488,21 @@ export async function insertWeatherSnapshot(
       snapshot.windDirection ?? null,
       snapshot.pressure ?? null,
       snapshot.waterLevel ?? null,
-      snapshot.waterLevelTrend ?? null
+      snapshot.waterLevelTrend ?? null,
+      snapshot.apparentTemp ?? null,
+      snapshot.humidity ?? null,
+      snapshot.pressureMsl ?? null,
+      snapshot.windGust ?? null,
+      snapshot.cloudCover ?? null,
+      snapshot.precipitation ?? null,
+      snapshot.weatherCode ?? null,
+      snapshot.isDay ?? null,
+      snapshot.waveHeight ?? null,
+      snapshot.waveDirection ?? null,
+      snapshot.wavePeriod ?? null,
+      snapshot.currentVelocity ?? null,
+      snapshot.currentDirection ?? null,
+      snapshot.seaLevelMsl ?? null
     ]
   );
 }
@@ -467,6 +521,20 @@ export async function getWeatherForEvent(
     pressure: number | null;
     water_level: number | null;
     water_level_trend: string | null;
+    apparent_temp: number | null;
+    humidity: number | null;
+    pressure_msl: number | null;
+    wind_gust: number | null;
+    cloud_cover: number | null;
+    precipitation: number | null;
+    weather_code: number | null;
+    is_day: number | null;
+    wave_height: number | null;
+    wave_direction: number | null;
+    wave_period: number | null;
+    current_velocity: number | null;
+    current_direction: number | null;
+    sea_level_msl: number | null;
   }>("SELECT * FROM weather_snapshots WHERE event_id = ? LIMIT 1;", [eventId]);
   if (!row) {
     return null;
@@ -480,7 +548,21 @@ export async function getWeatherForEvent(
     windDirection: row.wind_direction ?? undefined,
     pressure: row.pressure ?? undefined,
     waterLevel: row.water_level ?? undefined,
-    waterLevelTrend: row.water_level_trend ?? undefined
+    waterLevelTrend: row.water_level_trend ?? undefined,
+    apparentTemp: row.apparent_temp ?? undefined,
+    humidity: row.humidity ?? undefined,
+    pressureMsl: row.pressure_msl ?? undefined,
+    windGust: row.wind_gust ?? undefined,
+    cloudCover: row.cloud_cover ?? undefined,
+    precipitation: row.precipitation ?? undefined,
+    weatherCode: row.weather_code ?? undefined,
+    isDay: row.is_day ?? undefined,
+    waveHeight: row.wave_height ?? undefined,
+    waveDirection: row.wave_direction ?? undefined,
+    wavePeriod: row.wave_period ?? undefined,
+    currentVelocity: row.current_velocity ?? undefined,
+    currentDirection: row.current_direction ?? undefined,
+    seaLevelMsl: row.sea_level_msl ?? undefined
   };
 }
 
