@@ -22,7 +22,7 @@ import { getWeatherForEvent, type WeatherSnapshot } from "@/database/queries";
 import { getLures, getLureById, type Lure } from "@/database/lures";
 import { LureColourDot } from "@/components/LureColourDot";
 import { getDb } from "@/database/db";
-import { degreesToCompass } from "@/services/weather";
+import { windLabel } from "@/services/weather";
 import { useStrikeStore, type StrikeEvent } from "@/store/useStrikeStore";
 import type { WaterLevelTrend } from "@/services/dmi";
 import { useTranslation } from "@/i18n";
@@ -598,7 +598,7 @@ export default function EventDetailScreen() {
               <DetailRow
                 icon="navigate-outline"
                 label={t("catchDetail.wind")}
-                value={`${weather.windDirection ? degreesToCompass(parseFloat(weather.windDirection)) : "–"} ${Math.round(weather.windSpeed)} m/s`}
+                value={`${windLabel(weather.windDirection) ?? "–"} ${Math.round(weather.windSpeed)} m/s`}
               />
             ) : null}
             {weather?.pressure != null ? (

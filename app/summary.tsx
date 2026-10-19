@@ -11,7 +11,7 @@ import { getDb } from "@/database/db";
 import { getLureById, type Lure } from "@/database/lures";
 import { getWeatherForEvent, type WeatherSnapshot } from "@/database/queries";
 import { formatDistance, formatDuration, useStrikeStore } from "@/store/useStrikeStore";
-import { degreesToCompass } from "@/services/weather";
+import { windLabel } from "@/services/weather";
 import { getStreakData } from "@/services/statistics";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
@@ -128,11 +128,7 @@ export default function SummaryScreen() {
       conditionChips.push({ icon: "water-outline", label: t("weather.water", { v: Math.round(tripWeather.waterTemp) }) });
     }
     if (tripWeather.windSpeed != null) {
-      const dir = tripWeather.windDirection
-        ? (tripWeather.windDirection.length <= 3
-          ? tripWeather.windDirection // already a compass label
-          : degreesToCompass(parseFloat(tripWeather.windDirection)))
-        : "";
+      const dir = windLabel(tripWeather.windDirection) ?? "";
       conditionChips.push({ icon: "navigate-outline", label: `${dir} ${Math.round(tripWeather.windSpeed)} m/s`.trim() });
     }
   }

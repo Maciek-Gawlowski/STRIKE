@@ -1,7 +1,7 @@
 import { cellToLatLng } from "@/services/hexGrid";
 import type { StrikeEvent } from "@/store/useStrikeStore";
 import { supabase } from "./supabase";
-import { degreesToCompass, type WeatherData } from "./weather";
+import { degreesToCompass, windLabel, type WeatherData } from "./weather";
 import type { SQLiteDatabase } from "expo-sqlite";
 import { getBiteMapDeleteQueue, clearBiteMapDeleteQueue, type WeatherSnapshot } from "@/database/queries";
 import { recordSyncFailure, recordSyncSuccess } from "./syncStatus";
@@ -164,7 +164,7 @@ export async function resyncBiteMapEvent(
   }
   try {
     const timestamp = new Date(event.timestamp);
-    const windDegrees = weather?.windDirection != null ? parseFloat(weather.windDirection) : NaN;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("bite_map_events") as any).insert({
       local_event_id: event.id,
@@ -173,7 +173,7 @@ export async function resyncBiteMapEvent(
       species: event.type === "catch" ? (event.species ?? null) : null,
       hour_of_day: timestamp.getHours(),
       date: timestamp.toISOString().slice(0, 10),
-      wind_direction: !isNaN(windDegrees) ? degreesToCompass(windDegrees) : null,
+      wind_direction: windLabel(weather?.windDirection),
       water_temp: weather?.waterTemp ?? null,
     });
   } catch (error) {

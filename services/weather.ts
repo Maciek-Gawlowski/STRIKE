@@ -63,6 +63,22 @@ export function degreesToCompass(degrees: number): string {
   return COMPASS_16[index];
 }
 
+/**
+ * Wind direction as it is stored on a snapshot, rendered as a compass label.
+ *
+ * The column has carried two different things over the app's life: early rows
+ * kept the raw bearing as a string, later ones the compass label itself. Code
+ * that assumed one or the other was wrong half the time — feeding "NW" to a
+ * function expecting degrees is what put "undefined 4 m/s" on the catch screen,
+ * and the reverse put a null wind direction on the shared map. Deciding from
+ * the value rather than from an assumption is correct for both vintages.
+ */
+export function windLabel(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  const degrees = Number(stored);
+  return Number.isFinite(degrees) ? degreesToCompass(degrees) : stored;
+}
+
 /** Human-readable wind summary, e.g. "NW 7 m/s". */
 export function formatWind(data: WeatherData): string {
   return `${degreesToCompass(data.windDirection)} ${Math.round(data.windSpeed)} m/s`;
