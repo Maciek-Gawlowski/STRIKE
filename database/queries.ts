@@ -39,6 +39,10 @@ type EventRow = {
   weight_kg: number | null;
   lure_id: string | null;
   h3_cell: string | null;
+  coloration: string | null;
+  is_kelt: number | null;
+  is_greenlander: number | null;
+  is_fin_clipped: number | null;
 };
 
 export type WeatherSnapshot = {
@@ -85,6 +89,16 @@ function parseRoute(routeJson: string): Coordinate[] {
   }
 }
 
+/** Optional boolean to SQLite's integer, keeping "not recorded" distinct from "no". */
+function flag(value: boolean | undefined): number | null {
+  return value === undefined ? null : value ? 1 : 0;
+}
+
+/** The same distinction on the way back: NULL stays undefined, not false. */
+function unflag(value: number | null): boolean | undefined {
+  return value === null ? undefined : value === 1;
+}
+
 function rowToEvent(row: EventRow): StrikeEvent {
   // `released` is the inverse of the UI's `kept` flag. NULL means the event has
   // no kept/released semantics (contact / following).
@@ -101,6 +115,10 @@ function rowToEvent(row: EventRow): StrikeEvent {
     lengthCm: row.length_cm ?? undefined,
     weightKg: row.weight_kg ?? undefined,
     lureId: row.lure_id ?? undefined,
+    coloration: (row.coloration as StrikeEvent["coloration"]) ?? undefined,
+    isKelt: unflag(row.is_kelt),
+    isGreenlander: unflag(row.is_greenlander),
+    isFinClipped: unflag(row.is_fin_clipped),
   };
 }
 
@@ -181,8 +199,8 @@ export async function upsertEvent(
 ): Promise<void> {
   const cell = h3Cell ?? latLngToCell(event.position.latitude, event.position.longitude);
   await db.runAsync(
-    `INSERT INTO events (id, trip_id, type, timestamp, lat, lng, photo_uri, species, comment, released, sync_status, privacy_level, length_cm, weight_kg, lure_id, h3_cell)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO events (id, trip_id, type, timestamp, lat, lng, photo_uri, species, comment, released, sync_status, privacy_level, length_cm, weight_kg, lure_id, h3_cell, coloration, is_kelt, is_greenlander, is_fin_clipped)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        trip_id = excluded.trip_id,
        type = excluded.type,
@@ -198,7 +216,11 @@ export async function upsertEvent(
        length_cm = excluded.length_cm,
        weight_kg = excluded.weight_kg,
        lure_id = excluded.lure_id,
-       h3_cell = excluded.h3_cell;`,
+       h3_cell = excluded.h3_cell,
+       coloration = excluded.coloration,
+       is_kelt = excluded.is_kelt,
+       is_greenlander = excluded.is_greenlander,
+       is_fin_clipped = excluded.is_fin_clipped;`,
     [
       event.id,
       tripId,
@@ -216,6 +238,10 @@ export async function upsertEvent(
       event.weightKg ?? null,
       event.lureId ?? null,
       cell,
+      event.coloration ?? null,
+      flag(event.isKelt),
+      flag(event.isGreenlander),
+      flag(event.isFinClipped),
     ]
   );
 }

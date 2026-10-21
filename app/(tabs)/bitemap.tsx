@@ -66,6 +66,7 @@ const EVENT_TYPE_OPTIONS = [
 ] as const;
 
 const SPECIES_PREF_KEY = "strike.biteMapSpecies";
+const LAYERS_PREF_KEY = "strike.biteMapLayers";
 const EVENT_TYPES_PREF_KEY = "strike.biteMapEventTypes";
 
 function modeToSince(mode: TimeMode): string {
@@ -151,6 +152,20 @@ export default function BiteMapScreen() {
   // left a fresh install staring at an empty map — which is exactly what a
   // tester reads as "the app is broken".
   const [speciesFilter, setSpeciesFilter] = useState<string>("");
+
+  /**
+   * Which layers are drawn. Two independent switches rather than one three-way
+   * control, because the two layers are not alternatives: they answer different
+   * questions and most of the time you want both.
+   *
+   * It also fixes something dishonest. With only a community layer on screen
+   * under a heading that says COMMUNITY DATA, an angler fishing alone on an
+   * empty coast sees their own four catches come back as a glowing cell and
+   * reads it as other people. Being able to switch our own layer off is how
+   * they can tell the difference.
+   */
+  const [showOwnLayer, setShowOwnLayer] = useState(true);
+  const [showCommunityLayer, setShowCommunityLayer] = useState(true);
   const [eventTypeFilter, setEventTypeFilter] = useState<string[]>([]);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [hexes, setHexes] = useState<HexActivity[]>([]);
@@ -281,10 +296,17 @@ export default function BiteMapScreen() {
 
   // Restore sticky filter prefs on mount
   useEffect(() => {
-    AsyncStorage.multiGet([SPECIES_PREF_KEY, EVENT_TYPES_PREF_KEY])
-      .then(([[, sp], [, et]]) => {
+    AsyncStorage.multiGet([SPECIES_PREF_KEY, EVENT_TYPES_PREF_KEY, LAYERS_PREF_KEY])
+      .then(([[, sp], [, et], [, layers]]) => {
         if (sp) setSpeciesFilter(sp);
         if (et) { try { setEventTypeFilter(JSON.parse(et) as string[]); } catch { /* ignore */ } }
+        if (layers) {
+          try {
+            const parsed = JSON.parse(layers) as { own?: boolean; community?: boolean };
+            if (typeof parsed.own === "boolean") setShowOwnLayer(parsed.own);
+            if (typeof parsed.community === "boolean") setShowCommunityLayer(parsed.community);
+          } catch { /* ignore */ }
+        }
       })
       .catch(() => null);
   }, []);
@@ -450,6 +472,12 @@ export default function BiteMapScreen() {
     setSelectedSpot(null);
   }, []);
 
+  const setLayers = useCallback((own: boolean, community: boolean) => {
+    setShowOwnLayer(own);
+    setShowCommunityLayer(community);
+    void AsyncStorage.setItem(LAYERS_PREF_KEY, JSON.stringify({ own, community }));
+  }, []);
+
   const hasActiveFilters = speciesFilter !== "" || eventTypeFilter.length > 0;
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -505,6 +533,38 @@ export default function BiteMapScreen() {
         </Pressable>
       </View>
 
+      {/* Layers. Kept out on the screen rather than inside the filter sheet:
+          which data you are looking at is not a filter, it is the first thing
+          you need to know about what is in front of you. */}
+      <View style={styles.layerRow}>
+        <Pressable
+          style={[styles.layerChip, showOwnLayer && styles.layerChipOwn]}
+          onPress={() => setLayers(!showOwnLayer, showCommunityLayer)}
+        >
+          <Ionicons
+            name="fish-outline"
+            size={14}
+            color={showOwnLayer ? Colors.navy : Colors.textMuted}
+          />
+          <Text style={[styles.layerChipText, showOwnLayer && styles.layerChipTextActive]}>
+            {t("bitemap.layerOwn")}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.layerChip, showCommunityLayer && styles.layerChipCommunity]}
+          onPress={() => setLayers(showOwnLayer, !showCommunityLayer)}
+        >
+          <Ionicons
+            name="people-outline"
+            size={14}
+            color={showCommunityLayer ? Colors.navy : Colors.textMuted}
+          />
+          <Text style={[styles.layerChipText, showCommunityLayer && styles.layerChipTextActive]}>
+            {t("bitemap.layerCommunity")}
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Map — hero element; map-type button floats top-right */}
       <View
         style={styles.mapShell}
@@ -555,7 +615,7 @@ export default function BiteMapScreen() {
             badges are for. A filled dot is a catch, a ring is a contact or a
             follow.
           */}
-          {cellPolygons.map((cell) => (
+          {(showCommunityLayer ? cellPolygons : []).map((cell) => (
             <Polygon
               key={`cell-${cell.cell}`}
               coordinates={cell.coordinates}
@@ -573,7 +633,7 @@ export default function BiteMapScreen() {
               }}
             />
           ))}
-          {ownClusters.map((cluster) => (
+          {(showOwnLayer ? ownClusters : []).map((cluster) => (
             <Marker
               key={`own-${cluster.cell}`}
               coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
@@ -952,6 +1012,38 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: {
     color: Colors.textOnAmber
+  },
+  layerRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  layerChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.glassBg,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder
+  },
+  layerChipOwn: {
+    backgroundColor: Colors.catchGreen,
+    borderColor: Colors.catchGreen
+  },
+  layerChipCommunity: {
+    backgroundColor: Colors.amber,
+    borderColor: Colors.amber
+  },
+  layerChipText: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontFamily: Fonts.bodyBold,
+    letterSpacing: 0.3
+  },
+  layerChipTextActive: {
+    color: Colors.navy
   },
   // ── Control row (time + filter button) ──
   controlRow: {

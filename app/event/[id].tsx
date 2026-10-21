@@ -23,6 +23,7 @@ import { getLures, getLureById, type Lure } from "@/database/lures";
 import { LureColourDot } from "@/components/LureColourDot";
 import { getDb } from "@/database/db";
 import { windLabel } from "@/services/weather";
+import { fultonK, moonPhase, skyFromWeatherCode } from "@/services/conditions";
 import { useStrikeStore, type StrikeEvent } from "@/store/useStrikeStore";
 import type { WaterLevelTrend } from "@/services/dmi";
 import { useTranslation } from "@/i18n";
@@ -54,6 +55,10 @@ const TYPE_ICONS = {
 
 type EditFields = {
   species: string;
+  coloration: "blank" | "farvet" | "";
+  isKelt: boolean;
+  isGreenlander: boolean;
+  isFinClipped: boolean;
   comment: string;
   kept: boolean;
   lengthCm: string;
@@ -107,6 +112,18 @@ export default function EventDetailScreen() {
   const waterLevel = useStrikeStore((state) => state.waterLevel);
 
   // For photo events: catches in the same trip, used for the attach picker.
+  /**
+   * Conditions nobody had to store. Moon phase comes from the event's own
+   * timestamp and the condition factor from its length and weight, so both
+   * appear on catches logged long before either was asked for — including
+   * every row already in the database.
+   */
+  const moon = useMemo(() => (event ? moonPhase(event.timestamp) : null), [event]);
+  const condition = useMemo(
+    () => (event ? fultonK(event.lengthCm, event.weightKg) : null),
+    [event]
+  );
+
   const tripCatches = useMemo(
     () => trip?.events.filter((e) => e.type === "catch") ?? [],
     [trip]
@@ -118,7 +135,8 @@ export default function EventDetailScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [lurePickerOpen, setLurePickerOpen] = useState(false);
   const [edit, setEdit] = useState<EditFields>({
-    species: "", comment: "", kept: false, lengthCm: "", weightKg: "",
+    species: "", coloration: "", isKelt: false, isGreenlander: false, isFinClipped: false,
+    comment: "", kept: false, lengthCm: "", weightKg: "",
     lureId: null, photoUri: undefined,
     airTemp: "", waterTemp: "", windSpeed: "", windDirection: "", pressure: "",
   });
@@ -144,6 +162,10 @@ export default function EventDetailScreen() {
     if (!event) return;
     setEdit({
       species: event.species ?? "",
+      coloration: event.coloration ?? "",
+      isKelt: event.isKelt ?? false,
+      isGreenlander: event.isGreenlander ?? false,
+      isFinClipped: event.isFinClipped ?? false,
       comment: event.comment ?? "",
       kept: event.kept ?? false,
       lengthCm: event.lengthCm != null ? String(event.lengthCm) : "",
@@ -181,6 +203,12 @@ export default function EventDetailScreen() {
       ...event,
       photoUri: edit.photoUri,
       species: edit.species.trim() || undefined,
+      // Only meaningful on a catch, and an untouched toggle stays undefined so
+      // "nobody said" never silently becomes "no".
+      coloration: event.type === "catch" && edit.coloration ? edit.coloration : undefined,
+      isKelt: event.type === "catch" && edit.isKelt ? true : undefined,
+      isGreenlander: event.type === "catch" && edit.isGreenlander ? true : undefined,
+      isFinClipped: event.type === "catch" && edit.isFinClipped ? true : undefined,
       comment: edit.comment.trim() || undefined,
       kept: event.type === "catch" ? edit.kept : event.kept,
       lengthCm: parseNum(edit.lengthCm),
@@ -452,6 +480,53 @@ export default function EventDetailScreen() {
                 </View>
               </EditRow>
 
+              <EditRow label={t("eventEdit.coloration")}>
+                <View style={styles.keptRow}>
+                  {(["blank", "farvet"] as const).map((value) => (
+                    <Pressable
+                      key={value}
+                      style={[styles.keptBtn, edit.coloration === value && styles.keptBtnActive]}
+                      // Tapping the active one clears it: a fish nobody looked
+                      // closely at should be able to go back to unrecorded.
+                      onPress={() =>
+                        setEdit((p) => ({ ...p, coloration: p.coloration === value ? "" : value }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.keptBtnText,
+                          edit.coloration === value && styles.keptBtnTextActive
+                        ]}
+                      >
+                        {t(`eventEdit.${value}` as never)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </EditRow>
+
+              <EditRow label={t("eventEdit.marks")}>
+                <View style={styles.marksRow}>
+                  {([
+                    ["isKelt", "nedfaldsfisk"],
+                    ["isGreenlander", "greenlander"],
+                    ["isFinClipped", "finClipped"]
+                  ] as const).map(([field, labelKey]) => (
+                    <Pressable
+                      key={field}
+                      style={[styles.markChip, edit[field] && styles.markChipActive]}
+                      onPress={() => setEdit((p) => ({ ...p, [field]: !p[field] }))}
+                    >
+                      <Text
+                        style={[styles.markChipText, edit[field] && styles.markChipTextActive]}
+                      >
+                        {t(`eventEdit.${labelKey}` as never)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </EditRow>
+
               <EditRow label={t("eventEdit.lure")}>
                 <Pressable
                   style={styles.lurePickerBtn}
@@ -580,6 +655,27 @@ export default function EventDetailScreen() {
                 value={event.kept ? t("catchDetail.kept") : t("catchDetail.released")}
               />
             ) : null}
+            {isCatch && event.coloration ? (
+              <DetailRow
+                icon="color-palette-outline"
+                label={t("catchDetail.coloration")}
+                value={t(`eventEdit.${event.coloration}` as never)}
+              />
+            ) : null}
+            {(() => {
+              const marks = [
+                event.isKelt ? t("eventEdit.nedfaldsfisk") : null,
+                event.isGreenlander ? t("eventEdit.greenlander") : null,
+                event.isFinClipped ? t("eventEdit.finClipped") : null
+              ].filter(Boolean);
+              return marks.length > 0 ? (
+                <DetailRow
+                  icon="pricetags-outline"
+                  label={t("catchDetail.marks")}
+                  value={marks.join(" · ")}
+                />
+              ) : null;
+            })()}
             {weather?.airTemp != null ? (
               <DetailRow
                 icon="thermometer-outline"
@@ -608,11 +704,44 @@ export default function EventDetailScreen() {
                 value={`${Math.round(weather.pressure)} hPa`}
               />
             ) : null}
+            {(() => {
+              const sky = skyFromWeatherCode(weather?.weatherCode, weather?.cloudCover);
+              return sky ? (
+                <DetailRow
+                  icon="partly-sunny-outline"
+                  label={t("catchDetail.sky")}
+                  value={t(`sky.${sky}` as never)}
+                />
+              ) : null;
+            })()}
+            {moon ? (
+              <DetailRow
+                icon="moon-outline"
+                label={t("catchDetail.moon")}
+                value={`${t(`moon.${moon.key}` as never)} · ${Math.round(moon.illumination * 100)}%`}
+              />
+            ) : null}
             {waterLevel ? (
               <DetailRow
                 icon="water-outline"
                 label={t("catchDetail.waterLevel")}
                 value={`${waterLevelTrendArrow(waterLevel.trend)} ${waterLevel.level} cm · ${t(`weather.${waterLevel.phase}`)}`}
+              />
+            ) : null}
+            {weather?.currentVelocity != null ? (
+              <DetailRow
+                icon="swap-horizontal-outline"
+                label={t("catchDetail.current")}
+                value={`${windLabel(
+                  weather.currentDirection != null ? String(weather.currentDirection) : null
+                ) ?? "–"} ${weather.currentVelocity.toFixed(1)} km/t`}
+              />
+            ) : null}
+            {condition != null ? (
+              <DetailRow
+                icon="fitness-outline"
+                label={t("catchDetail.condition")}
+                value={`K ${condition.toFixed(2)}`}
               />
             ) : null}
             {lure ? (
@@ -968,6 +1097,30 @@ speciesGrid: {
   keptBtnActive: {
     backgroundColor: Colors.amber,
     borderColor: Colors.amber,
+  },
+  marksRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  markChip: {
+    paddingHorizontal: 14,
+    minHeight: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.field
+  },
+  markChipActive: {
+    backgroundColor: Colors.amber
+  },
+  markChipText: {
+    color: Colors.textMuted,
+    fontSize: 14,
+    fontFamily: Fonts.bodySemibold
+  },
+  markChipTextActive: {
+    color: Colors.navy
   },
   keptBtnText: {
     color: Colors.textMuted,

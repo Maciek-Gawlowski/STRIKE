@@ -56,6 +56,19 @@ export type StrikeEvent = {
   lengthCm?: number;
   weightKg?: number;
   lureId?: string;
+  /**
+   * What kind of sea trout it was. Silver or in spawning dress decides what is
+   * legal to keep once the closed season starts on 16 November, and the three
+   * marks below are separate because a fish can carry more than one of them.
+   * Undefined means nobody said — deliberately not the same as false.
+   */
+  coloration?: "blank" | "farvet";
+  /** Nedfaldsfisk: a kelt, already spawned and on its way back down. */
+  isKelt?: boolean;
+  /** Grønlænder: never ran the river, stayed in salt water. */
+  isGreenlander?: boolean;
+  /** Finneklippet: hatchery-reared, adipose fin clipped. */
+  isFinClipped?: boolean;
 };
 
 export type Trip = {

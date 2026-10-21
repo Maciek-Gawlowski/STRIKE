@@ -56,9 +56,12 @@ import type { SQLiteDatabase } from "expo-sqlite";
  *  v18 -> weather_snapshots gains the fourteen conditions Open-Meteo already
  *         returned but we never asked for (gusts, cloud, precipitation, waves,
  *         currents, sea level, MSL pressure). Stored, not yet displayed.
+ *  v19 -> events.coloration + is_kelt / is_greenlander / is_fin_clipped: what
+ *         kind of sea trout it was. Needed before the closed season, since
+ *         blank and farvet are the legal distinction from 16 November.
  */
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 
 export const CREATE_TRIPS_TABLE = `
   CREATE TABLE IF NOT EXISTS trips (
@@ -429,6 +432,31 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       }
     }
     current = 18;
+  }
+
+  // v19: what kind of sea trout it was, not just that one was caught.
+  //
+  // A Danish angler does not land "a sea trout" — they land a silver fish, or a
+  // coloured one in spawning dress, or a kelt that has already spawned and is
+  // thin, or a grønlænder that never ran the river, or a hatchery fish you can
+  // tell by the clipped fin. These distinctions decide what is legal to keep in
+  // the closed season and they are the vocabulary the logbook has to speak to
+  // be worth filling in. Coloration is one value; the three marks are separate
+  // flags, because a fish can be more than one of them and guessing an
+  // exclusivity we are not sure of would quietly lose information.
+  if (current < 19) {
+    const columns: Array<[string, string]> = [
+      ["coloration", "TEXT"],      // "blank" | "farvet"
+      ["is_kelt", "INTEGER"],      // nedfaldsfisk
+      ["is_greenlander", "INTEGER"], // grønlænder
+      ["is_fin_clipped", "INTEGER"]  // finneklippet
+    ];
+    for (const [name, type] of columns) {
+      if (!(await columnExists(db, "events", name))) {
+        await db.execAsync(`ALTER TABLE events ADD COLUMN ${name} ${type};`);
+      }
+    }
+    current = 19;
   }
 
   if (current !== SCHEMA_VERSION) {

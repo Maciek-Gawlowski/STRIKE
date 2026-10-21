@@ -210,7 +210,13 @@
     "kept": "Kept",
     "cm": "cm",
     "kg": "kg",
-    "lure": "Lure"
+    "lure": "Lure",
+    "sky": "Sky",
+    "moon": "Moon phase",
+    "current": "Current",
+    "condition": "Condition",
+    "coloration": "Coloration",
+    "marks": "Markings"
   },
   "summary": {
     "noSummary": "No summary yet",
@@ -470,7 +476,14 @@
     "waterTemp": "Water temp (°C)",
     "windSpeed": "Wind (m/s)",
     "windDir": "Wind direction (°)",
-    "pressure": "Pressure (hPa)"
+    "pressure": "Pressure (hPa)",
+    "coloration": "Silver / coloured",
+    "blank": "Silver",
+    "farvet": "Coloured",
+    "marks": "Markings",
+    "nedfaldsfisk": "Kelt",
+    "greenlander": "Greenlander",
+    "finClipped": "Fin-clipped"
   },
   "bitemap": {
     "kicker": "COMMUNITY DATA",
@@ -507,10 +520,31 @@
     "filterEventType": "Activity type",
     "filterMapType": "Map type",
     "emptyWithOwn": "No shared activity here yet — the amber marks are your own catches. A zone appears once several anglers have reported from it.",
-    "ownLayer": "Your catches"
+    "ownLayer": "Your catches",
+    "layerOwn": "My catches",
+    "layerCommunity": "Community"
   },
   "errors": {
     "tripNotFound": "Trip not found",
     "eventNotFound": "Event not found"
+  },
+  "sky": {
+    "clear": "Clear",
+    "partly": "Partly cloudy",
+    "overcast": "Overcast",
+    "fog": "Fog",
+    "rain": "Rain",
+    "snow": "Snow",
+    "thunder": "Thunderstorm"
+  },
+  "moon": {
+    "new": "New moon",
+    "waxingCrescent": "Waxing crescent",
+    "firstQuarter": "First quarter",
+    "waxingGibbous": "Waxing gibbous",
+    "full": "Full moon",
+    "waningGibbous": "Waning gibbous",
+    "lastQuarter": "Last quarter",
+    "waningCrescent": "Waning crescent"
   }
 }

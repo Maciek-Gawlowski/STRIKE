@@ -210,7 +210,13 @@
     "kept": "Hjemtaget",
     "cm": "cm",
     "kg": "kg",
-    "lure": "Agn"
+    "lure": "Agn",
+    "sky": "Himmel",
+    "moon": "Månefase",
+    "current": "Strøm",
+    "condition": "Kondition",
+    "coloration": "Tilstand",
+    "marks": "Kendetegn"
   },
   "summary": {
     "noSummary": "Ingen opsummering endnu",
@@ -470,7 +476,14 @@
     "waterTemp": "Vandtemp (°C)",
     "windSpeed": "Vind (m/s)",
     "windDir": "Vindretning (°)",
-    "pressure": "Lufttryk (hPa)"
+    "pressure": "Lufttryk (hPa)",
+    "coloration": "Blank / farvet",
+    "blank": "Blank",
+    "farvet": "Farvet",
+    "marks": "Kendetegn",
+    "nedfaldsfisk": "Nedfaldsfisk",
+    "greenlander": "Grønlænder",
+    "finClipped": "Finneklippet"
   },
   "bitemap": {
     "kicker": "FÆLLESSKABETS DATA",
@@ -507,10 +520,31 @@
     "filterEventType": "Aktivitetstype",
     "filterMapType": "Korttype",
     "emptyWithOwn": "Ingen fælles aktivitet her endnu — de gule mærker er dine egne fangster. Et felt dukker op, når flere fiskere har meldt fra det.",
-    "ownLayer": "Dine fangster"
+    "ownLayer": "Dine fangster",
+    "layerOwn": "Mine fangster",
+    "layerCommunity": "Fællesskabet"
   },
   "errors": {
     "tripNotFound": "Tur ikke fundet",
     "eventNotFound": "Hændelse ikke fundet"
+  },
+  "sky": {
+    "clear": "Solrigt",
+    "partly": "Delvis overskyet",
+    "overcast": "Overskyet",
+    "fog": "Tåge",
+    "rain": "Regn",
+    "snow": "Sne",
+    "thunder": "Tordenvejr"
+  },
+  "moon": {
+    "new": "Nymåne",
+    "waxingCrescent": "Tiltagende måne",
+    "firstQuarter": "Første kvarter",
+    "waxingGibbous": "Tiltagende halvmåne",
+    "full": "Fuldmåne",
+    "waningGibbous": "Aftagende halvmåne",
+    "lastQuarter": "Sidste kvarter",
+    "waningCrescent": "Aftagende måne"
   }
 }
