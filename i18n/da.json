@@ -60,7 +60,8 @@
     "flooding": "Stigende tidevand",
     "ebbing": "Ebbende",
     "highTide": "Højvande",
-    "lowTide": "Lavvande"
+    "lowTide": "Lavvande",
+    "currentShort": "Strøm"
   },
   "home": {
     "kicker": "LOGBOG",

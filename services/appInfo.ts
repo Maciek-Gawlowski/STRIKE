@@ -1,3 +1,4 @@
+import * as Application from "expo-application";
 import Constants from "expo-constants";
 
 /**
@@ -10,10 +11,16 @@ import Constants from "expo-constants";
  * message from every tester would have arrived stamped "—" during a week when
  * several builds are in circulation.
  *
- * There is no way to invent the number if the platform does not expose it, so
- * this does two honest things instead: it tries every place it can legitimately
- * appear, and when it genuinely cannot be resolved it says which situation it
- * is in rather than printing a dash that could mean either.
+ * The fix is to stop asking the manifest and ask the binary. expo-application
+ * reads CFBundleVersion out of the installed app itself, which is the number
+ * TestFlight shows and the only one that is true by construction — EAS stamps
+ * it at build time, so no config file has to agree with anything. The manifest
+ * lookups stay as a fallback for Expo Go, where there is no binary to read.
+ *
+ * This matters most in exactly the week it is least convenient to fix: when
+ * several builds are in circulation and twenty testers are sending feedback,
+ * a report that does not say which build it came from costs more than the
+ * feature it is reporting on.
  */
 
 type Manifest2 = {
@@ -24,9 +31,14 @@ type Manifest2 = {
 export const isExpoGo = Constants.appOwnership === "expo";
 
 export const appVersion: string =
+  Application.nativeApplicationVersion ??
   Constants.expoConfig?.version ?? (Constants as { manifest2?: { extra?: { expoClient?: { version?: string } } } }).manifest2?.extra?.expoClient?.version ?? "?";
 
 function resolveBuildNumber(): string | null {
+  // The installed binary first: this is the number TestFlight displays.
+  const fromBinary = Application.nativeBuildVersion;
+  if (fromBinary) return String(fromBinary);
+
   const fromConfig =
     Constants.expoConfig?.ios?.buildNumber ??
     (Constants.expoConfig?.android?.versionCode != null

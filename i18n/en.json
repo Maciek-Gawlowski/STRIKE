@@ -60,7 +60,8 @@
     "flooding": "Flooding",
     "ebbing": "Ebbing",
     "highTide": "High tide",
-    "lowTide": "Low tide"
+    "lowTide": "Low tide",
+    "currentShort": "Current"
   },
   "home": {
     "kicker": "FIELD LOG",

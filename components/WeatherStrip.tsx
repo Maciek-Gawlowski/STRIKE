@@ -2,7 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { ComponentProps } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useStrikeStore } from "@/store/useStrikeStore";
-import { formatWind } from "@/services/weather";
+import { formatWind, windLabel } from "@/services/weather";
+import { moonPhase, skyFromWeatherCode } from "@/services/conditions";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
@@ -60,11 +61,27 @@ export function WeatherStrip() {
       : t("weather.lowTide")
     : null;
 
-  // Pressure, tide and the station name are context, not headline. They change
-  // slowly and nobody decides a session on them alone.
+  const sky = skyFromWeatherCode(weather?.weatherCode, weather?.cloudCover);
+  // Moon phase needs nothing but the clock, so it is here whether or not the
+  // weather request came back.
+  const moon = moonPhase(new Date());
+
+  // Pressure, tide, sky, moon and current are context, not headline. They
+  // change slowly and nobody decides a session on them alone — but the section
+  // is called MILJØDATA, so everything we actually know belongs in it rather
+  // than three pills and a heading that overpromises.
   const footnote = [
+    sky ? t(`sky.${sky}` as never) : null,
     weather ? `${Math.round(weather.pressure)} hPa` : null,
     waterLevel ? `${waterLevel.level} cm · ${phaseLabel}` : null,
+    weather?.currentVelocity != null
+      ? `${t("weather.currentShort")} ${
+          windLabel(
+            weather.currentDirection != null ? String(weather.currentDirection) : null
+          ) ?? "–"
+        } ${weather.currentVelocity.toFixed(1)} km/t`
+      : null,
+    `${t(`moon.${moon.key}` as never)} ${Math.round(moon.illumination * 100)}%`,
     waterLevel?.stationName ?? null
   ].filter(Boolean).join("   ·   ");
 
@@ -103,7 +120,7 @@ export function WeatherStrip() {
           </>
         ) : null}
       </View>
-      {footnote ? <Text style={styles.footnote} numberOfLines={2}>{footnote}</Text> : null}
+      {footnote ? <Text style={styles.footnote} numberOfLines={3}>{footnote}</Text> : null}
     </View>
   );
 }
