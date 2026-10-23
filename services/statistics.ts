@@ -1,4 +1,5 @@
 import { getDb } from "@/database/db";
+import { moonPhase } from "./conditions";
 import { COUNTED_TRIPS_SQL, COUNTED_TRIPS_SQL_BARE } from "./tripRules";
 
 /**
@@ -10,6 +11,8 @@ import { COUNTED_TRIPS_SQL, COUNTED_TRIPS_SQL_BARE } from "./tripRules";
  */
 
 export type WindDirectionCount = { direction: string; count: number };
+/** One of four moon bands — see MOON_BANDS for why four and not eight. */
+export type MoonBandBucket = { band: string; count: number };
 export type WaterTempBucket = { range: string; count: number };
 export type LongestTrip = { date: string; distance: number; duration: string };
 export type BestTrip = { date: string; catches: number; contacts: number };
@@ -26,6 +29,7 @@ export type Statistics = {
   bestTimeOfDay: string | null; // e.g. "06:00-09:00"
   catchesByWindDirection: WindDirectionCount[];
   catchesByWaterTemp: WaterTempBucket[];
+  catchesByMoonBand: MoonBandBucket[];
   /** 24-element array — catch count per hour of day (0–23), local time. */
   catchHourCounts: number[];
   totalDistance: number; // km
@@ -35,6 +39,16 @@ export type Statistics = {
 };
 
 const WATER_TEMP_RANGES = ["<8°C", "8-12°C", "12-16°C", ">16°C"] as const;
+
+export const MOON_BANDS = ["new", "waxing", "full", "waning"] as const;
+
+/** Collapses the eight named phases into the four bands the chart shows. */
+function moonBand(timestamp: string): string {
+  const { key } = moonPhase(timestamp);
+  if (key === "new") return "new";
+  if (key === "full") return "full";
+  return key.startsWith("waxing") || key === "firstQuarter" ? "waxing" : "waning";
+}
 
 // Trips longer than this are treated as abandoned/forgotten and excluded from
 // averages so a single runaway session doesn't distort catches/trip, km/contact, etc.
@@ -328,6 +342,32 @@ export async function getStatistics(): Promise<Statistics | null> {
     count: tempCounts.get(range) ?? 0
   }));
 
+  // Catches by moon band.
+  //
+  // Four bands rather than the eight named phases: with a season's fishing
+  // behind you, eight buckets means one or two catches in each and a chart
+  // that reads as noise. Four is still the distinction anglers talk about —
+  // dark nights, building moon, full moon, fading moon.
+  //
+  // This is the only breakdown on the screen that needs no weather at all. It
+  // comes from the catch's own timestamp, so it works on every row ever
+  // written, including the ones logged before the app collected conditions.
+  const moonRows = await db.getAllAsync<{ ts: string }>(
+    `SELECT e.timestamp AS ts
+     FROM events e
+     JOIN trips t ON t.id = e.trip_id
+     WHERE ${COUNTED_TRIPS} AND e.type = 'catch';`
+  );
+  const moonCounts = new Map<string, number>(MOON_BANDS.map((band) => [band, 0]));
+  for (const row of moonRows) {
+    const band = moonBand(row.ts);
+    moonCounts.set(band, (moonCounts.get(band) ?? 0) + 1);
+  }
+  const catchesByMoonBand: MoonBandBucket[] = MOON_BANDS.map((band) => ({
+    band,
+    count: moonCounts.get(band) ?? 0
+  }));
+
   // Longest trip (by distance).
   const longestRow = await db.getFirstAsync<{
     start_time: string;
@@ -380,6 +420,7 @@ export async function getStatistics(): Promise<Statistics | null> {
     bestTimeOfDay,
     catchesByWindDirection,
     catchesByWaterTemp,
+    catchesByMoonBand,
     catchHourCounts,
     totalDistance,
     totalHours,

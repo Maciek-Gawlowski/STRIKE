@@ -302,6 +302,13 @@
       "afternoon": "Eftermiddag",
       "evening": "Aften",
       "night": "Nat"
+    },
+    "byMoon": "FANGSTER EFTER MÅNEFASE",
+    "moonBand": {
+      "new": "Nymåne",
+      "waxing": "Tiltagende",
+      "full": "Fuldmåne",
+      "waning": "Aftagende"
     }
   },
   "profile": {

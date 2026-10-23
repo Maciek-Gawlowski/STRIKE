@@ -302,6 +302,13 @@
       "afternoon": "Afternoon",
       "evening": "Evening",
       "night": "Night"
+    },
+    "byMoon": "CATCHES BY MOON PHASE",
+    "moonBand": {
+      "new": "New",
+      "waxing": "Waxing",
+      "full": "Full",
+      "waning": "Waning"
     }
   },
   "profile": {

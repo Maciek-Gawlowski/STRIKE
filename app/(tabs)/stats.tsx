@@ -8,7 +8,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
 import { SectionHeader } from "@/components/SectionHeader";
-import { getStatistics, getBestConditions, getLureStats, type Statistics, type WindDirectionCount, type WaterTempBucket, type BestConditions, type LureStat } from "@/services/statistics";
+import { getStatistics, getBestConditions, getLureStats, type Statistics, type WindDirectionCount, type BestConditions, type LureStat } from "@/services/statistics";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { LureColourDot } from "@/components/LureColourDot";
 import { useTranslation } from "@/i18n";
@@ -97,7 +97,12 @@ const CHART_BOTTOM = 22, CHART_TOP = 10;
 const CHART_USABLE_H = CHART_H - CHART_BOTTOM - CHART_TOP;
 const CHART_START_X = 0;
 
-function TempBarChart({ data }: { data: WaterTempBucket[] }) {
+/**
+ * One bar per bucket. Takes anything with a label and a count, because the
+ * water-temperature chart and the moon chart are the same picture with
+ * different axes, and two copies of it would drift the way the map markers did.
+ */
+function BucketBarChart({ data }: { data: Array<{ label: string; count: number }> }) {
   const maxCount = Math.max(...data.map((d) => d.count), 1);
 
   return (
@@ -111,7 +116,7 @@ function TempBarChart({ data }: { data: WaterTempBucket[] }) {
         const opacity = bucket.count > 0 ? 0.3 + 0.7 * (bucket.count / maxCount) : 0.1;
 
         return (
-          <G key={bucket.range}>
+          <G key={bucket.label}>
             {/* background slot */}
             <Rect x={x} y={CHART_TOP} width={BAR_W} height={CHART_USABLE_H}
               fill="rgba(217,218,213,0.05)" rx={6} />
@@ -130,7 +135,7 @@ function TempBarChart({ data }: { data: WaterTempBucket[] }) {
             <SvgText x={x + BAR_W / 2} y={CHART_H - 5}
               fill={Colors.textMuted} fontSize={8}
               textAnchor="middle" fontFamily={Fonts.bodySemibold}>
-              {bucket.range}
+              {bucket.label}
             </SvgText>
           </G>
         );
@@ -284,16 +289,21 @@ function TimeOfDayRing({ hourCounts, t }: { hourCounts: number[]; t: (k: string)
             />
           );
         })}
-        {/* centre label */}
-        <SvgText x={RING_CX} y={RING_CY - 5} textAnchor="middle"
+        {/* Centre: the count large, the period name under it.
+            It used to be the other way round, and "Eftermiddag" at ten points
+            with the count eight points below ran the two lines into each other
+            inside a 72-point hole. A number is two characters wide whatever
+            the language, so putting it first makes the collision impossible
+            rather than merely unlikely. */}
+        <SvgText x={RING_CX} y={RING_CY + 2} textAnchor="middle"
           fill={total > 0 ? best.color : Colors.textMuted}
-          fontSize={10} fontFamily={Fonts.bodySemibold}>
-          {total > 0 ? best.label : "–"}
+          fontSize={22} fontFamily={Fonts.heading}>
+          {total > 0 ? String(best.count) : "–"}
         </SvgText>
         {total > 0 && (
-          <SvgText x={RING_CX} y={RING_CY + 9} textAnchor="middle"
-            fill={Colors.textMuted} fontSize={8} fontFamily={Fonts.body}>
-            {best.count} {t("metrics.catches").toLowerCase()}
+          <SvgText x={RING_CX} y={RING_CY + 17} textAnchor="middle"
+            fill={Colors.textMuted} fontSize={9} fontFamily={Fonts.bodySemibold}>
+            {best.label}
           </SvgText>
         )}
       </Svg>
@@ -655,6 +665,7 @@ export default function StatsScreen() {
 
   const hasWindData = stats.catchesByWindDirection.length > 0;
   const hasTempData = stats.catchesByWaterTemp.some((b) => b.count > 0);
+  const hasMoonData = stats.catchesByMoonBand.some((b) => b.count > 0);
   const hasHourData = stats.catchHourCounts.some((c) => c > 0);
 
   return (
@@ -800,7 +811,27 @@ export default function StatsScreen() {
       <GlassCard style={styles.panel}>
         {hasTempData ? (
           <View style={styles.barChartWrap}>
-            <TempBarChart data={stats.catchesByWaterTemp} />
+            <BucketBarChart data={stats.catchesByWaterTemp.map((b) => ({ label: b.range, count: b.count }))} />
+          </View>
+        ) : (
+          <ChartNoData label={noDataLabel} />
+        )}
+      </GlassCard>
+
+      {/* f) Catches by moon band. Unlike every other breakdown here this one
+             needs no weather data, so it has something to say from the very
+             first catch — including catches logged before the app collected
+             conditions at all. */}
+      <SectionHeader title={t("stats.byMoon")} />
+      <GlassCard style={styles.panel}>
+        {hasMoonData ? (
+          <View style={styles.barChartWrap}>
+            <BucketBarChart
+              data={stats.catchesByMoonBand.map((b) => ({
+                label: t(`stats.moonBand.${b.band}` as never),
+                count: b.count
+              }))}
+            />
           </View>
         ) : (
           <ChartNoData label={noDataLabel} />
