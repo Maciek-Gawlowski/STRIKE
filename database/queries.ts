@@ -400,11 +400,37 @@ export type EventLocation = {
 
 export type OwnEvent = {
   id: string;
+  tripId: string;
   type: StrikeEventType;
   latitude: number;
   longitude: number;
   timestamp: string;
 };
+
+export type OwnTripRoute = {
+  id: string;
+  title: string;
+  startedAt: string;
+  route: Coordinate[];
+};
+
+/** Upper bound on points per route drawn on the Activity Map. */
+const MAX_ROUTE_POINTS = 250;
+
+/**
+ * Thin a GPS track to at most `max` points, always keeping the first and last.
+ * A 3-hour trip can hold thousands of fixes; drawing all of them for a dozen
+ * trips on one map is wasted work for a line that is a few pixels wide.
+ */
+function thinRoute(route: Coordinate[], max: number): Coordinate[] {
+  if (route.length <= max) return route;
+  const step = (route.length - 1) / (max - 1);
+  const out: Coordinate[] = [];
+  for (let i = 0; i < max; i++) {
+    out.push(route[Math.round(i * step)]);
+  }
+  return out;
+}
 
 /**
  * The user's own positioned events, for the personal layer on the Activity
@@ -424,12 +450,13 @@ export async function getOwnEventsInWindow(
 ): Promise<OwnEvent[]> {
   const rows = await db.getAllAsync<{
     id: string;
+    trip_id: string;
     type: string;
     lat: number;
     lng: number;
     timestamp: string;
   }>(
-    `SELECT id, type, lat, lng, timestamp
+    `SELECT id, trip_id, type, lat, lng, timestamp
      FROM events
      WHERE type IN ('catch', 'contact', 'following')
        AND timestamp >= ?
@@ -443,11 +470,48 @@ export async function getOwnEventsInWindow(
   );
   return rows.map((row) => ({
     id: row.id,
+    tripId: row.trip_id,
     type: row.type as StrikeEventType,
     latitude: row.lat,
     longitude: row.lng,
     timestamp: row.timestamp
   }));
+}
+
+/**
+ * The user's own finished trips in a time window, with their GPS track, for
+ * the detailed personal layer on the Activity Map. Local only — routes never
+ * leave the phone. An active trip is excluded: its route is still growing and
+ * already has its own live map.
+ */
+export async function getOwnTripRoutesInWindow(
+  db: SQLiteDatabase,
+  since: string,
+  until?: string | null
+): Promise<OwnTripRoute[]> {
+  const rows = await db.getAllAsync<{
+    id: string;
+    name: string | null;
+    start_time: string;
+    route_json: string;
+  }>(
+    `SELECT id, name, start_time, route_json
+     FROM trips
+     WHERE end_time IS NOT NULL
+       AND start_time >= ?
+       AND (? IS NULL OR start_time <= ?)
+     ORDER BY start_time DESC
+     LIMIT 50;`,
+    [since, until ?? null, until ?? null]
+  );
+  return rows
+    .map((row) => ({
+      id: row.id,
+      title: row.name ?? "",
+      startedAt: row.start_time,
+      route: thinRoute(parseRoute(row.route_json), MAX_ROUTE_POINTS)
+    }))
+    .filter((trip) => trip.route.length >= 2);
 }
 
 /**

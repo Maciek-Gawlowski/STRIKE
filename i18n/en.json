@@ -528,9 +528,11 @@
     "filterEventType": "Activity type",
     "filterMapType": "Map type",
     "emptyWithOwn": "No shared activity here yet — the amber marks are your own catches. A zone appears once several anglers have reported from it.",
-    "ownLayer": "Your catches",
+    "ownLayer": "Your observations",
     "layerOwn": "My catches",
-    "layerCommunity": "Community"
+    "layerCommunity": "Community",
+    "zoomForDetail": "Zoom in to see each observation and your routes",
+    "ownDetailHint": "Tap an observation or a route to open it"
   },
   "errors": {
     "tripNotFound": "Trip not found",

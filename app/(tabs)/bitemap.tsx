@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import MapView, { Marker, Polygon } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { GlassCard } from "@/components/GlassCard";
 import { GradientLegend } from "@/components/GradientLegend";
 import { Screen } from "@/components/Screen";
@@ -18,7 +18,12 @@ import { cellToPolygon, latLngToCell } from "@/services/hexGrid";
 import { EVENT_MARKER_COLORS, EVENT_MARKER_ICONS, dominantEventType } from "@/components/eventMarkers";
 import { OwnEventPin } from "@/components/OwnEventPin";
 import { deleteSpot, getSpots, upsertSpot, type Spot } from "@/database/spots";
-import { getOwnEventsInWindow, type OwnEvent } from "@/database/queries";
+import {
+  getOwnEventsInWindow,
+  getOwnTripRoutesInWindow,
+  type OwnEvent,
+  type OwnTripRoute
+} from "@/database/queries";
 import { useTranslation } from "@/i18n";
 import { ALS_CENTER } from "@/services/zones";
 import { useStrikeStore } from "@/store/useStrikeStore";
@@ -47,6 +52,15 @@ const INITIAL_LAT_DELTA = 0.4;
 const MAX_LAT_DELTA_FOR_OVERLAY = 4;
 const MIN_CELL_OBSERVATIONS = 3;
 const MIN_HOTSPOT_OBSERVATIONS = MIN_CELL_OBSERVATIONS + 1;
+/**
+ * Zoom level at which the personal layer switches from one grouped pin per
+ * cell to every observation on its own, plus the trip routes. ~0.08° of
+ * latitude is roughly 9 km top to bottom: close enough that a single stretch
+ * of coast fills the map, so individual pins are worth tapping.
+ */
+const DETAIL_LAT_DELTA = 0.08;
+/** Own trip routes: visible but quieter than both the pins and the community cells. */
+const OWN_ROUTE_COLOR = "rgba(242, 243, 239, 0.55)";
 
 type TimeMode = "24h" | "7d" | "30d" | "custom";
 type TimeTab = { val: TimeMode; labelKey: string };
@@ -178,6 +192,8 @@ export default function BiteMapScreen() {
   const [spots, setSpots] = useState<Spot[]>([]);
   // The user's own events, drawn as a separate layer from the shared heat.
   const [ownEvents, setOwnEvents] = useState<OwnEvent[]>([]);
+  // The user's own finished trips in the same window, drawn only when zoomed in.
+  const [ownRoutes, setOwnRoutes] = useState<OwnTripRoute[]>([]);
   /**
    * react-native-maps snapshots a marker's child view once and reuses the
    * bitmap. With tracksViewChanges pinned to false from the first render the
@@ -283,9 +299,15 @@ export default function BiteMapScreen() {
     // in the first place.
     try {
       const db = await getDb();
-      const own = await getOwnEventsInWindow(db, filter.since, filter.until ?? null);
-      console.log(`[strike/map] personal layer: ${own.length} own events since ${filter.since}`);
+      const [own, routes] = await Promise.all([
+        getOwnEventsInWindow(db, filter.since, filter.until ?? null),
+        getOwnTripRoutesInWindow(db, filter.since, filter.until ?? null)
+      ]);
+      console.log(
+        `[strike/map] personal layer: ${own.length} own events, ${routes.length} routes since ${filter.since}`
+      );
       setOwnEvents(own);
+      setOwnRoutes(routes);
     } catch (error) {
       // A failed local read must not blank the shared map — but it must not be
       // invisible either. A silent catch around a database read is how this
@@ -406,6 +428,42 @@ export default function BiteMapScreen() {
     }));
   }, [ownEvents]);
 
+  /**
+   * Zoomed in, the grouping above stops helping: one stretch of coast fills
+   * the screen and "3" on a pin hides exactly what the angler wants to see —
+   * which follow, which strike, which fish, and the route walked between them.
+   * So past DETAIL_LAT_DELTA the personal layer draws like the single-trip map:
+   * every observation on its own pin (tap → that observation) and each trip's
+   * route (tap → that trip). Zoomed out it goes back to grouped pins, because
+   * fifty overlapping pins and routes at county scale is noise.
+   */
+  const detailMode = liveRegion.latitudeDelta <= DETAIL_LAT_DELTA;
+
+  const ownDetailEvents = useMemo(
+    () =>
+      // Catches drawn last so they sit on top when pins overlap.
+      [...ownEvents]
+        .filter((event) => inViewport(event.latitude, event.longitude, liveRegion))
+        .sort((a, b) => (a.type === "catch" ? 1 : 0) - (b.type === "catch" ? 1 : 0)),
+    [ownEvents, liveRegion]
+  );
+
+  const ownDetailRoutes = useMemo(
+    () =>
+      ownRoutes.filter((trip) =>
+        trip.route.some((point) => inViewport(point.latitude, point.longitude, liveRegion))
+      ),
+    [ownRoutes, liveRegion]
+  );
+
+  // Switching between grouped and detailed pins mounts a new set of markers,
+  // which need the same brief tracksViewChanges window as a data reload.
+  useEffect(() => {
+    setTrackOwnMarkers(true);
+    const timer = setTimeout(() => setTrackOwnMarkers(false), 1000);
+    return () => clearTimeout(timer);
+  }, [detailMode]);
+
   // Top 8 hex cells by activity — rendered as numbered markers
   const hotspots = useMemo(
     () => [...hexes].sort((a, b) => b.total - a.total).filter((h) => h.total >= MIN_HOTSPOT_OBSERVATIONS).slice(0, 8),
@@ -413,7 +471,12 @@ export default function BiteMapScreen() {
   );
 
   const handleMapPress = useCallback(
-    (event: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
+    (event: {
+      nativeEvent: { coordinate: { latitude: number; longitude: number }; action?: string };
+    }) => {
+      // On iOS a tap on a marker also reaches the map. That tap belongs to the
+      // marker (it navigates away), so don't also select whatever cell is near.
+      if (event.nativeEvent.action === "marker-press") return;
       // Tapping the map background clears spot selection and looks for a hex.
       setSelectedSpot(null);
       setSpotForm(null);
@@ -633,12 +696,51 @@ export default function BiteMapScreen() {
               }}
             />
           ))}
-          {(showOwnLayer ? ownClusters : []).map((cluster) => (
+          {/* Own trip routes — only zoomed in, drawn under the pins. */}
+          {(showOwnLayer && detailMode ? ownDetailRoutes : []).map((trip) => (
+            <Polyline
+              key={`route-${trip.id}`}
+              coordinates={trip.route}
+              strokeColor={OWN_ROUTE_COLOR}
+              strokeWidth={3}
+              lineCap="round"
+              lineJoin="round"
+              tappable
+              onPress={() => router.push(`/trip/${trip.id}`)}
+            />
+          ))}
+          {/* Zoomed in: every own observation on its own pin, tap opens it. */}
+          {(showOwnLayer && detailMode ? ownDetailEvents : []).map((event) => (
+            <Marker
+              key={`own-event-${event.id}`}
+              coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={trackOwnMarkers}
+              onPress={() => router.push(`/event/${event.id}`)}
+            >
+              <OwnEventPin type={event.type} count={1} />
+            </Marker>
+          ))}
+          {/* Zoomed out: one grouped pin per cell. */}
+          {(showOwnLayer && !detailMode ? ownClusters : []).map((cluster) => (
             <Marker
               key={`own-${cluster.cell}`}
               coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={trackOwnMarkers}
+              onPress={() =>
+                // A grouped pin zooms in to where its observations become
+                // individually tappable instead of doing nothing.
+                mapRef.current?.animateToRegion(
+                  {
+                    latitude: cluster.latitude,
+                    longitude: cluster.longitude,
+                    latitudeDelta: DETAIL_LAT_DELTA * 0.6,
+                    longitudeDelta: DETAIL_LAT_DELTA * 0.6
+                  },
+                  500
+                )
+              }
             >
               <OwnEventPin type={cluster.type} count={cluster.count} />
             </Marker>
@@ -775,13 +877,21 @@ export default function BiteMapScreen() {
         <Text style={styles.hint}>{t("bitemap.tapHint")}</Text>
       )}
 
-      {/* An amber dot on the map means nothing until it is named once. */}
-      {ownEvents.length > 0 ? (
-        <View style={styles.ownLayerKey}>
-          <View style={[styles.ownLayerChip, { backgroundColor: EVENT_MARKER_COLORS.catch }]}>
-            <Ionicons name={EVENT_MARKER_ICONS.catch} size={11} color="#fff" />
+      {/* The personal layer's key: all three observation types, since the
+          layer shows all three — naming only catches was wrong. */}
+      {showOwnLayer && ownEvents.length > 0 ? (
+        <View style={styles.ownLayerKeyBlock}>
+          <View style={styles.ownLayerKey}>
+            {(["catch", "contact", "following"] as const).map((type) => (
+              <View key={type} style={[styles.ownLayerChip, { backgroundColor: EVENT_MARKER_COLORS[type] }]}>
+                <Ionicons name={EVENT_MARKER_ICONS[type]} size={11} color="#fff" />
+              </View>
+            ))}
+            <Text style={styles.ownLayerKeyText}>{t("bitemap.ownLayer")}</Text>
           </View>
-          <Text style={styles.ownLayerKeyText}>{t("bitemap.ownLayer")}</Text>
+          <Text style={styles.ownLayerKeyHint}>
+            {detailMode ? t("bitemap.ownDetailHint") : t("bitemap.zoomForDetail")}
+          </Text>
         </View>
       ) : null}
 
@@ -1358,17 +1468,27 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   // ── Hotspot numbered markers ──
+  ownLayerKeyBlock: {
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6
+  },
   ownLayerKey: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    alignSelf: "center",
-    marginTop: 6
+    gap: 6
   },
   ownLayerKeyText: {
     fontFamily: Fonts.body,
     fontSize: 12,
-    color: Colors.textMuted
+    color: Colors.textMuted,
+    marginLeft: 2
+  },
+  ownLayerKeyHint: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: "center"
   },
   // The legend's miniature of the pin itself — same icon, same colour, just
   // small enough to sit next to a line of text.

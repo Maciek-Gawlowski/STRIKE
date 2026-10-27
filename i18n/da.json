@@ -528,9 +528,11 @@
     "filterEventType": "Aktivitetstype",
     "filterMapType": "Korttype",
     "emptyWithOwn": "Ingen fælles aktivitet her endnu — de gule mærker er dine egne fangster. Et felt dukker op, når flere fiskere har meldt fra det.",
-    "ownLayer": "Dine fangster",
+    "ownLayer": "Dine registreringer",
     "layerOwn": "Mine fangster",
-    "layerCommunity": "Fællesskabet"
+    "layerCommunity": "Fællesskabet",
+    "zoomForDetail": "Zoom ind for at se hver enkelt registrering og dine ruter",
+    "ownDetailHint": "Tryk på en registrering eller en rute for at åbne den"
   },
   "errors": {
     "tripNotFound": "Tur ikke fundet",
