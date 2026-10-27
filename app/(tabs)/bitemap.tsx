@@ -386,11 +386,19 @@ export default function BiteMapScreen() {
    * the server actually reported — no pixel maths, no zoom multiplier, and the
    * shape always covers exactly the right ground.
    */
+  /*
+   * NOT filtered by viewport or zoom any more. Build 47 crashed natively
+   * (NSInvalidArgumentException in RCTLegacyViewManagerInteropComponentView
+   * finalizeUpdates) while zooming: react-native-maps 1.20 runs through the
+   * New Architecture's legacy interop layer, and that layer aborts when MapView
+   * children are mounted and unmounted in quick succession — which is exactly
+   * what a viewport filter re-run on every onRegionChangeComplete does. The map
+   * clips off-screen overlays itself, so the set of children must only change
+   * when the data changes, never when the camera moves.
+   */
   const cellPolygons = useMemo(() => {
-    if (liveRegion.latitudeDelta > MAX_LAT_DELTA_FOR_OVERLAY) return [];
     return hexes
       .filter((hex) => hex.total >= MIN_CELL_OBSERVATIONS)
-      .filter((hex) => inViewport(hex.lat, hex.lng, liveRegion))
       .map((hex) => ({
         cell: hex.h3_cell,
         total: hex.total,
@@ -398,7 +406,7 @@ export default function BiteMapScreen() {
         color: getActivityColor(hex.total),
         alpha: cellFillAlpha(hex.total)
       }));
-  }, [hexes, liveRegion]);
+  }, [hexes]);
 
   /**
    * The angler's own events, grouped by the cell they fall in. Five catches on
@@ -439,30 +447,26 @@ export default function BiteMapScreen() {
    */
   const detailMode = liveRegion.latitudeDelta <= DETAIL_LAT_DELTA;
 
+  // Not viewport-filtered, for the same reason as cellPolygons above.
   const ownDetailEvents = useMemo(
     () =>
       // Catches drawn last so they sit on top when pins overlap.
-      [...ownEvents]
-        .filter((event) => inViewport(event.latitude, event.longitude, liveRegion))
-        .sort((a, b) => (a.type === "catch" ? 1 : 0) - (b.type === "catch" ? 1 : 0)),
-    [ownEvents, liveRegion]
+      [...ownEvents].sort((a, b) => (a.type === "catch" ? 1 : 0) - (b.type === "catch" ? 1 : 0)),
+    [ownEvents]
   );
 
-  const ownDetailRoutes = useMemo(
-    () =>
-      ownRoutes.filter((trip) =>
-        trip.route.some((point) => inViewport(point.latitude, point.longitude, liveRegion))
-      ),
-    [ownRoutes, liveRegion]
-  );
-
-  // Switching between grouped and detailed pins mounts a new set of markers,
-  // which need the same brief tracksViewChanges window as a data reload.
-  useEffect(() => {
-    setTrackOwnMarkers(true);
-    const timer = setTimeout(() => setTrackOwnMarkers(false), 1000);
-    return () => clearTimeout(timer);
-  }, [detailMode]);
+  /*
+   * Layer visibility. Every layer stays mounted and is hidden through its props
+   * (opacity / transparent colours / tappable) instead of being conditionally
+   * rendered: toggling a layer or crossing DETAIL_LAT_DELTA while zooming used
+   * to mount and unmount whole groups of MapView children, which is what
+   * crashed the interop layer (see cellPolygons). Changing props on children
+   * that already exist is safe.
+   */
+  const showCells = showCommunityLayer;
+  const showOwnDetail = showOwnLayer && detailMode;
+  const showOwnClusters = showOwnLayer && !detailMode;
+  const HIDDEN = "rgba(0,0,0,0)";
 
   // Top 8 hex cells by activity — rendered as numbered markers
   const hotspots = useMemo(
@@ -678,15 +682,16 @@ export default function BiteMapScreen() {
             badges are for. A filled dot is a catch, a ring is a contact or a
             follow.
           */}
-          {(showCommunityLayer ? cellPolygons : []).map((cell) => (
+          {cellPolygons.map((cell) => (
             <Polygon
               key={`cell-${cell.cell}`}
               coordinates={cell.coordinates}
-              fillColor={`${cell.color}${cell.alpha}`}
-              strokeColor={cell.color}
+              fillColor={showCells ? `${cell.color}${cell.alpha}` : HIDDEN}
+              strokeColor={showCells ? cell.color : HIDDEN}
               strokeWidth={cell.total >= 9 ? 2.5 : 2}
-              tappable
+              tappable={showCells}
               onPress={() => {
+                if (!showCells) return;
                 // The cell is a real shape now, so it can answer for itself.
                 // handleMapPress still guesses the nearest cell from a tap on
                 // bare map, for the gap between two drawn cells.
@@ -697,40 +702,47 @@ export default function BiteMapScreen() {
             />
           ))}
           {/* Own trip routes — only zoomed in, drawn under the pins. */}
-          {(showOwnLayer && detailMode ? ownDetailRoutes : []).map((trip) => (
+          {ownRoutes.map((trip) => (
             <Polyline
               key={`route-${trip.id}`}
               coordinates={trip.route}
-              strokeColor={OWN_ROUTE_COLOR}
+              strokeColor={showOwnDetail ? OWN_ROUTE_COLOR : HIDDEN}
               strokeWidth={3}
               lineCap="round"
               lineJoin="round"
-              tappable
-              onPress={() => router.push(`/trip/${trip.id}`)}
+              tappable={showOwnDetail}
+              onPress={() => {
+                if (showOwnDetail) router.push(`/trip/${trip.id}`);
+              }}
             />
           ))}
           {/* Zoomed in: every own observation on its own pin, tap opens it. */}
-          {(showOwnLayer && detailMode ? ownDetailEvents : []).map((event) => (
+          {ownDetailEvents.map((event) => (
             <Marker
               key={`own-event-${event.id}`}
               coordinate={{ latitude: event.latitude, longitude: event.longitude }}
               anchor={{ x: 0.5, y: 0.5 }}
+              opacity={showOwnDetail ? 1 : 0}
               tracksViewChanges={trackOwnMarkers}
-              onPress={() => router.push(`/event/${event.id}`)}
+              onPress={() => {
+                if (showOwnDetail) router.push(`/event/${event.id}`);
+              }}
             >
               <OwnEventPin type={event.type} count={1} />
             </Marker>
           ))}
           {/* Zoomed out: one grouped pin per cell. */}
-          {(showOwnLayer && !detailMode ? ownClusters : []).map((cluster) => (
+          {ownClusters.map((cluster) => (
             <Marker
               key={`own-${cluster.cell}`}
               coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
               anchor={{ x: 0.5, y: 0.5 }}
+              opacity={showOwnClusters ? 1 : 0}
               tracksViewChanges={trackOwnMarkers}
               onPress={() =>
                 // A grouped pin zooms in to where its observations become
                 // individually tappable instead of doing nothing.
+                showOwnClusters &&
                 mapRef.current?.animateToRegion(
                   {
                     latitude: cluster.latitude,
@@ -752,6 +764,9 @@ export default function BiteMapScreen() {
                 key={`hotspot-${hex.h3_cell}`}
                 coordinate={{ latitude: hex.lat, longitude: hex.lng }}
                 anchor={{ x: 0.5, y: 0.5 }}
+                // Hotspots are community data, so they follow the community
+                // switch (they used to stay visible with it off).
+                opacity={showCells ? 1 : 0}
                 tracksViewChanges={false}
               >
                 <View style={[styles.hotspotCircle, { borderColor: ringColor }]}>
