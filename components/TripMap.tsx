@@ -6,6 +6,7 @@ import MapView, { Marker, Polyline, Region } from "react-native-maps";
 import type { Coordinate, StrikeEvent } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ProtectionZoneLayer, type ZoneLabels } from "@/components/ProtectionZoneLayer";
 import { Colors } from "@/theme/colors";
 // Shared with the Activity Map so one catch looks the same on both.
 import { EVENT_MARKER_COLORS as markerColors, EVENT_MARKER_ICONS as markerIcons } from "@/components/eventMarkers";
@@ -24,6 +25,10 @@ type TripMapProps = {
   vignette?: boolean;
   /** Increment to trigger/restart a route replay animation. */
   replayTick?: number;
+  /** Draws the Danish fredningsbaelter under the route. */
+  showProtectionZones?: boolean;
+  /** Localised strings for the zone popup; the layer defaults to Danish. */
+  protectionZoneLabels?: ZoneLabels;
 };
 
 
@@ -46,8 +51,11 @@ const mapStyle = [
   { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#17382f" }] }
 ];
 
+/** Fallback camera position when there is no route yet. */
+const DEFAULT_CENTRE: Coordinate = { latitude: 55.2796, longitude: 12.4481 };
+
 const regionFrom = (route: Coordinate[]): Region => {
-  const point = route[route.length - 1] ?? { latitude: 55.2796, longitude: 12.4481 };
+  const point = route[route.length - 1] ?? DEFAULT_CENTRE;
   return {
     latitude: point.latitude,
     longitude: point.longitude,
@@ -102,10 +110,11 @@ function TripMapInner({
   isActive = false,
   vignette = false,
   replayTick,
+  showProtectionZones = false,
+  protectionZoneLabels,
 }: TripMapProps) {
   const { t } = useTranslation();
   const [displayCount, setDisplayCount] = useState<number | null>(null);
-
   useEffect(() => {
     if (replayTick === undefined) return;
     setDisplayCount(2);
@@ -140,6 +149,10 @@ function TripMapInner({
         showsUserLocation={!isActive}
         showsCompass={false}
       >
+        {showProtectionZones ? (
+          <ProtectionZoneLayer labels={protectionZoneLabels} />
+        ) : null}
+
         {displayedRoute.length > 1 ? (
           <Polyline
             coordinates={displayedRoute}

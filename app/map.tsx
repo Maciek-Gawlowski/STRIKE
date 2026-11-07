@@ -173,6 +173,7 @@ export default function MapScreen() {
         mapType={mapType}
         isActive
         currentLocation={currentLocation ?? undefined}
+        showProtectionZones
       />
 
       <View style={styles.mapTypeRow}>
