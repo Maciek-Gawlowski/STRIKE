@@ -30,6 +30,22 @@ const WEATHER_INTERVAL_MS = 15 * 60 * 1000;
 const MAX_ACCURACY_M = 50;
 const MAX_SPEED_MPS = 15;
 
+/**
+ * How long the accuracy guard may starve the route before it yields.
+ *
+ * 50 m is right for someone on an open shore, but it is a guess about every
+ * other place people fish — under a cliff, in trees, in heavy rain. If that
+ * guess is wrong the app records nothing at all, which is a worse bug than
+ * the one being fixed and looks identical to a short walk.
+ *
+ * So after a minute with nothing accepted, the next fix goes in regardless of
+ * what the phone says about its accuracy. The speed guard still applies, and
+ * it is the one that actually stops the island jumps: two kilometres in a
+ * minute is 33 m/s and still gets thrown out. This only loosens precision,
+ * never plausibility.
+ */
+const ACCURACY_STARVATION_MS = 60 * 1000;
+
 /** Metres between two coordinates. Equirectangular is plenty at these distances. */
 function metresBetween(
   a: { latitude: number; longitude: number },
@@ -68,13 +84,35 @@ export function TripWatcher() {
      * half its points looks exactly like a short walk, and that is how this
      * class of bug stays invisible for weeks.
      */
-    const acceptPosition = (position: Location.LocationObject, label: string) => {
+    const acceptPosition = (
+      position: Location.LocationObject,
+      label: string,
+      /**
+       * Skips the accuracy guard. Used for the opening fix only, which is
+       * fetched at Balanced accuracy (~100 m on iOS) and would therefore
+       * fail the 50 m test every single time. Without it there is no first
+       * point, so no route, no trip name, and nothing for the speed guard to
+       * measure against — the filter would starve the route from the start
+       * rather than protect it. The watch that follows runs at High and is
+       * guarded normally.
+       */
+      alwaysAccept = false
+    ) => {
       const { latitude, longitude, accuracy } = position.coords;
       const at = position.timestamp ?? Date.now();
 
-      if (accuracy != null && accuracy > MAX_ACCURACY_M) {
+      const starving =
+        alwaysAccept || (lastAccepted != null && at - lastAccepted.at > ACCURACY_STARVATION_MS);
+
+      if (accuracy != null && accuracy > MAX_ACCURACY_M && !starving) {
         console.warn(`[strike/gps] ${label} rejected — accuracy ${Math.round(accuracy)} m`);
         return;
+      }
+
+      if (starving && !alwaysAccept && accuracy != null && accuracy > MAX_ACCURACY_M) {
+        console.warn(
+          `[strike/gps] ${label} accepted at ${Math.round(accuracy)} m — nothing better for 60 s`
+        );
       }
 
       if (lastAccepted) {
@@ -175,7 +213,7 @@ export function TripWatcher() {
         const current = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced
         });
-        acceptPosition(current, "first fix");
+        acceptPosition(current, "first fix", true);
 
         // Name the trip after where it actually started. The user pressed Start
         // before any fix existed, so the trip is carrying a time-of-day name
