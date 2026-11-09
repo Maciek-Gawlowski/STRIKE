@@ -8,6 +8,39 @@ import { hasPrimedLocation, markLocationPrimed } from "@/database/preferences";
 
 const WEATHER_INTERVAL_MS = 15 * 60 * 1000;
 
+/**
+ * Position filtering.
+ *
+ * A tester on Barsø logged a six-hour trip whose route shot off the island
+ * and back twice. Nothing was wrong with the GPS: on a small island the
+ * satellite fix drops and iOS falls back to a cell-tower estimate, which it
+ * reports as a position like any other — just with an accuracy of several
+ * kilometres. The app wrote every one of them into the route.
+ *
+ * Two independent guards, because each catches what the other misses.
+ *
+ * MAX_ACCURACY_M throws away fixes the phone itself admits are vague. Most
+ * jumps announce themselves this way.
+ *
+ * MAX_SPEED_MPS catches the ones that lie. A fix can claim good accuracy and
+ * still be wrong; what it cannot do is be two kilometres from the last one a
+ * few seconds later. 15 m/s is 54 km/h — faster than anyone walking a shore
+ * or running a small boat, slow enough that a real crossing still registers.
+ */
+const MAX_ACCURACY_M = 50;
+const MAX_SPEED_MPS = 15;
+
+/** Metres between two coordinates. Equirectangular is plenty at these distances. */
+function metresBetween(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number }
+): number {
+  const latRad = ((a.latitude + b.latitude) / 2) * (Math.PI / 180);
+  const dx = (b.longitude - a.longitude) * 111320 * Math.cos(latRad);
+  const dy = (b.latitude - a.latitude) * 111132;
+  return Math.hypot(dx, dy);
+}
+
 export function TripWatcher() {
   const { t } = useTranslation();
   const activeTripId = useStrikeStore((state) => state.activeTrip?.id);
@@ -21,6 +54,45 @@ export function TripWatcher() {
     let mounted = true;
     let subscription: Location.LocationSubscription | null = null;
     let mockTimer: ReturnType<typeof setInterval> | null = null;
+
+    // Last position we trusted, for the speed check. Deliberately not read
+    // from the store: the store holds what was accepted, which is the same
+    // thing, but reading it here would couple the filter to the store's
+    // shape for no gain.
+    let lastAccepted: { latitude: number; longitude: number; at: number } | null = null;
+
+    /**
+     * Writes a fix to the route if it survives both guards.
+     *
+     * Rejections are logged rather than swallowed. A route quietly missing
+     * half its points looks exactly like a short walk, and that is how this
+     * class of bug stays invisible for weeks.
+     */
+    const acceptPosition = (position: Location.LocationObject, label: string) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      const at = position.timestamp ?? Date.now();
+
+      if (accuracy != null && accuracy > MAX_ACCURACY_M) {
+        console.warn(`[strike/gps] ${label} rejected — accuracy ${Math.round(accuracy)} m`);
+        return;
+      }
+
+      if (lastAccepted) {
+        const seconds = Math.max((at - lastAccepted.at) / 1000, 0.001);
+        const distance = metresBetween(lastAccepted, { latitude, longitude });
+        const speed = distance / seconds;
+        if (speed > MAX_SPEED_MPS) {
+          console.warn(
+            `[strike/gps] ${label} rejected — ${Math.round(distance)} m in ${seconds.toFixed(1)} s ` +
+              `(${Math.round(speed)} m/s)`
+          );
+          return;
+        }
+      }
+
+      lastAccepted = { latitude, longitude, at };
+      appendRoutePoint({ latitude, longitude }, "gps");
+    };
 
     const weatherTimer = setInterval(() => {
       useStrikeStore.getState().refreshWeather();
@@ -97,16 +169,13 @@ export function TripWatcher() {
       try {
         // Balanced accuracy returns a first fix far faster than High/Highest,
         // so the trip starts tracking quickly instead of stalling on GPS.
+        // Balanced for the FIRST fix only: it returns in a second or two where
+        // High can stall, and the trip needs a starting point more than it
+        // needs a precise one. The watch below runs at High.
         const current = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced
         });
-        appendRoutePoint(
-          {
-            latitude: current.coords.latitude,
-            longitude: current.coords.longitude
-          },
-          "gps"
-        );
+        acceptPosition(current, "first fix");
 
         // Name the trip after where it actually started. The user pressed Start
         // before any fix existed, so the trip is carrying a time-of-day name
@@ -129,19 +198,16 @@ export function TripWatcher() {
 
         subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Balanced,
-            distanceInterval: 8,
+            // High, not Balanced. Balanced is ~100 m on iOS, and with an 8 m
+            // distance filter that noise alone manufactures movement: the
+            // distance counter climbs while the phone sits on a rock. High is
+            // ~10 m. It costs battery, but the Barso test came back with
+            // almost none used, so there is room.
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 10,
             timeInterval: 3500
           },
-          (position) => {
-            appendRoutePoint(
-              {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude
-              },
-              "gps"
-            );
-          }
+          (position) => acceptPosition(position, "fix")
         );
       } catch (error) {
         // Same reasoning: a GPS failure that quietly becomes a fake route is
