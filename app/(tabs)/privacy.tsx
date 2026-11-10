@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { Screen } from "@/components/Screen";
+import { resolvePhotoUri } from "@/services/photoStorage";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { getDb } from "@/database/db";
 import {
@@ -298,7 +299,7 @@ export default function ProfileScreen() {
       <View style={styles.panel}>
         <Pressable style={styles.photoSection} onPress={handlePickPhoto}>
           {profilePhotoUri ? (
-            <Image source={{ uri: profilePhotoUri }} style={styles.avatar} />
+            <Image source={{ uri: resolvePhotoUri(profilePhotoUri) }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Ionicons name="person-outline" size={36} color={Colors.textMuted} />

@@ -460,7 +460,10 @@
     "toggleStats": "Include stats",
     "shareBtn": "Share to...",
     "preparing": "Preparing...",
-    "errorCapture": "Could not capture card"
+    "errorCapture": "Could not capture card",
+    "togglePhotosNoneHint": "This trip has no photos",
+    "toggleProfile": "Include name and profile photo",
+    "toggleProfileNoneHint": "Your profile has no name or photo yet"
   },
   "eventEdit": {
     "editBtn": "Edit",

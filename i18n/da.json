@@ -460,7 +460,10 @@
     "toggleStats": "Inkluder statistik",
     "shareBtn": "Del til...",
     "preparing": "Forbereder...",
-    "errorCapture": "Kunne ikke oprette delingskort"
+    "errorCapture": "Kunne ikke oprette delingskort",
+    "togglePhotosNoneHint": "Denne tur har ingen billeder",
+    "toggleProfile": "Inkluder navn og profilbillede",
+    "toggleProfileNoneHint": "Du har hverken navn eller billede i din profil"
   },
   "eventEdit": {
     "editBtn": "Rediger",

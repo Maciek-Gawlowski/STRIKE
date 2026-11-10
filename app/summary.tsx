@@ -5,6 +5,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { GlassCard } from "@/components/GlassCard";
 import { MetricChip } from "@/components/MetricChip";
 import { Screen } from "@/components/Screen";
+import { resolvePhotoUri } from "@/services/photoStorage";
 import { TripMap } from "@/components/TripMap";
 import { LureColourDot } from "@/components/LureColourDot";
 import { getDb } from "@/database/db";
@@ -217,7 +218,7 @@ export default function SummaryScreen() {
                 >
                   {/* Thumb */}
                   {event.photoUri ? (
-                    <Image source={{ uri: event.photoUri }} style={styles.catchThumb} />
+                    <Image source={{ uri: resolvePhotoUri(event.photoUri) }} style={styles.catchThumb} />
                   ) : (
                     <View style={[styles.catchThumb, styles.catchThumbEmpty]}>
                       <Ionicons name="fish-outline" size={16} color={Colors.textMuted} />

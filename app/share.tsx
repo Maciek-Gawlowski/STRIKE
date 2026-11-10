@@ -16,6 +16,7 @@ import { getDb } from "@/database/db";
 import { getWeatherForEvent, type WeatherSnapshot } from "@/database/queries";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
+import { getProfile } from "@/database/lures";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
 
@@ -41,13 +42,37 @@ export default function ShareScreen() {
   const [tripWeather, setTripWeather] = useState<WeatherSnapshot | null>(null);
 
   const [showPhotos, setShowPhotos] = useState(true);
+  // Off by default. A share card is the kind of thing people post publicly,
+  // and attaching someone's name and face to it is their call to make, not a
+  // default we quietly set for them. Same reasoning as the location toggle.
+  const [showProfile, setShowProfile] = useState(false);
+  const [profile, setProfile] = useState<{ displayName: string; photoUri: string } | null>(null);
   const [showRoute, setShowRoute] = useState(true);
   const [showLocation, setShowLocation] = useState(false);
   const [showStats, setShowStats] = useState(true);
 
-  const firstCatchPhotoUri = trip?.events.find(
-    (e) => e.type === "catch" && e.photoUri
-  )?.photoUri;
+  /**
+   * The photo that goes on the card.
+   *
+   * This used to look only for a photo attached to a CATCH, and photos are
+   * never stored that way — the camera button writes its own event of type
+   * "photo" (see app/map.tsx). So the lookup returned undefined on every trip
+   * ever logged, and "Include photo" silently did nothing for everyone,
+   * always. Claus noticed because he turned it on and got a route.
+   *
+   * A catch photo still wins when one exists, since that is the picture
+   * someone means to show. Otherwise any photo from the trip will do.
+   */
+  const sharePhotoUri =
+    trip?.events.find((e) => e.type === "catch" && e.photoUri)?.photoUri ??
+    trip?.events.find((e) => e.photoUri)?.photoUri;
+
+  useEffect(() => {
+    getDb()
+      .then(getProfile)
+      .then((p) => setProfile({ displayName: p.displayName, photoUri: p.photoUri }))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(PREFS_KEY)
@@ -56,6 +81,7 @@ export default function ShareScreen() {
         try {
           const p = JSON.parse(raw) as Record<string, boolean>;
           if (typeof p.showPhotos === "boolean") setShowPhotos(p.showPhotos);
+          if (typeof p.showProfile === "boolean") setShowProfile(p.showProfile);
           if (typeof p.showRoute === "boolean") setShowRoute(p.showRoute);
           if (typeof p.showLocation === "boolean") setShowLocation(p.showLocation);
           if (typeof p.showStats === "boolean") setShowStats(p.showStats);
@@ -66,6 +92,7 @@ export default function ShareScreen() {
 
   function savePrefs(next: {
     showPhotos: boolean;
+    showProfile: boolean;
     showRoute: boolean;
     showLocation: boolean;
     showStats: boolean;
@@ -74,11 +101,12 @@ export default function ShareScreen() {
   }
 
   function toggle(
-    key: "showPhotos" | "showRoute" | "showLocation" | "showStats",
+    key: "showPhotos" | "showRoute" | "showLocation" | "showStats" | "showProfile",
     val: boolean
   ) {
-    const next = { showPhotos, showRoute, showLocation, showStats, [key]: val };
+    const next = { showPhotos, showRoute, showLocation, showStats, showProfile, [key]: val };
     if (key === "showPhotos") setShowPhotos(val);
+    if (key === "showProfile") setShowProfile(val);
     else if (key === "showRoute") setShowRoute(val);
     else if (key === "showLocation") setShowLocation(val);
     else if (key === "showStats") setShowStats(val);
@@ -162,7 +190,9 @@ export default function ShareScreen() {
     showRoute,
     showStats,
     showLocation,
-    firstCatchPhotoUri: showPhotos ? firstCatchPhotoUri : undefined,
+    photoUri: showPhotos ? sharePhotoUri : undefined,
+    profileName: showProfile ? profile?.displayName || undefined : undefined,
+    profilePhotoUri: showProfile ? profile?.photoUri || undefined : undefined,
   };
 
   return (
@@ -201,8 +231,19 @@ export default function ShareScreen() {
           />
           <ToggleRow
             label={t("share.togglePhotos")}
+            hint={sharePhotoUri ? undefined : t("share.togglePhotosNoneHint")}
             value={showPhotos}
             onToggle={(v) => toggle("showPhotos", v)}
+          />
+          <ToggleRow
+            label={t("share.toggleProfile")}
+            hint={
+              profile?.displayName || profile?.photoUri
+                ? undefined
+                : t("share.toggleProfileNoneHint")
+            }
+            value={showProfile}
+            onToggle={(v) => toggle("showProfile", v)}
           />
           <ToggleRow
             label={t("share.toggleStats")}

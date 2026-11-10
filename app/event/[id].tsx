@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { GlassCard } from "@/components/GlassCard";
 import { Screen } from "@/components/Screen";
+import { resolvePhotoUri } from "@/services/photoStorage";
 import { TripMap } from "@/components/TripMap";
 import { getWeatherForEvent, type WeatherSnapshot } from "@/database/queries";
 import { getLures, getLureById, type Lure } from "@/database/lures";
@@ -301,7 +302,7 @@ export default function EventDetailScreen() {
       <View style={styles.hero}>
         {(isCatch || isPhoto) ? (
           hasPhoto ? (
-            <Image source={{ uri: displayPhotoUri }} style={styles.heroImage} resizeMode="cover" />
+            <Image source={{ uri: resolvePhotoUri(displayPhotoUri) }} style={styles.heroImage} resizeMode="cover" />
           ) : (
             <View style={styles.heroNoPhoto}>
               <Ionicons name="camera-outline" size={48} color="rgba(242,243,239,0.25)" />

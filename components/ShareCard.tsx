@@ -13,6 +13,7 @@ import { useTranslation } from "@/i18n";
 import type { Coordinate, Trip } from "@/store/useStrikeStore";
 import { formatDistance, formatDuration } from "@/store/useStrikeStore";
 import { Colors } from "@/theme/colors";
+import { resolvePhotoUri } from "@/services/photoStorage";
 import { Fonts } from "@/theme/fonts";
 
 // Instagram Story ratio: 9:16. At 3× device scale this captures at 1080×1920px.
@@ -27,7 +28,11 @@ type Props = {
   showRoute?: boolean;
   showStats?: boolean;
   showLocation?: boolean;
-  firstCatchPhotoUri?: string;
+  photoUri?: string;
+  /** Angler's display name, shown as a byline. Omitted when not shared. */
+  profileName?: string;
+  /** Angler's profile picture, shown next to the name. */
+  profilePhotoUri?: string;
 };
 
 /** Nautical-chart SVG background with the route as the hero. captureRef-safe (no MapView). */
@@ -183,7 +188,7 @@ function RoutePreview({ route, width, height }: { route: Coordinate[]; width: nu
 }
 
 export const ShareCard = React.forwardRef<View, Props>(
-  ({ trip, weather, contactsLabel, catchesLabel, showRoute = true, showStats = true, showLocation = false, firstCatchPhotoUri }, ref) => {
+  ({ trip, weather, contactsLabel, catchesLabel, showRoute = true, showStats = true, showLocation = false, photoUri, profileName, profilePhotoUri }, ref) => {
     const { t } = useTranslation();
     const catches = trip.events.filter((e) => e.type === "catch");
     const contacts = trip.events.filter((e) => e.type === "contact").length;
@@ -235,8 +240,8 @@ export const ShareCard = React.forwardRef<View, Props>(
 
         {/* Hero: photo → route → dark placeholder */}
         <View style={card.mapWrap}>
-          {firstCatchPhotoUri ? (
-            <Image source={{ uri: firstCatchPhotoUri }} style={card.heroPhoto} resizeMode="cover" />
+          {photoUri ? (
+            <Image source={{ uri: resolvePhotoUri(photoUri) }} style={card.heroPhoto} resizeMode="cover" />
           ) : showRoute ? (
             <RoutePreview route={trip.route} width={CARD_WIDTH} height={220} />
           ) : (
@@ -280,6 +285,17 @@ export const ShareCard = React.forwardRef<View, Props>(
           </View>
         ) : null}
 
+        {/* Byline: who caught it. Both halves are optional — someone may have a
+            name and no picture, or want the picture without the name. */}
+        {profileName || profilePhotoUri ? (
+          <View style={card.byline}>
+            {profilePhotoUri ? (
+              <Image source={{ uri: resolvePhotoUri(profilePhotoUri) }} style={card.bylineAvatar} />
+            ) : null}
+            {profileName ? <Text style={card.bylineName}>{profileName}</Text> : null}
+          </View>
+        ) : null}
+
         {/* Date */}
         <Text style={card.date}>{dateStr}</Text>
       </View>
@@ -290,6 +306,25 @@ export const ShareCard = React.forwardRef<View, Props>(
 ShareCard.displayName = "ShareCard";
 
 const card = StyleSheet.create({
+  byline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    marginTop: 14,
+  },
+  bylineAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  bylineName: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    fontFamily: Fonts.bodySemibold,
+  },
   root: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
