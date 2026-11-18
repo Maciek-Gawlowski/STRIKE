@@ -15,3 +15,5 @@ strike.mobileprovision
 *.mobileprovision
 asc-api-key.p8
 *.p8
+Claude outputs/
+.claude/
