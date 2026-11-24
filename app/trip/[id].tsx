@@ -12,7 +12,7 @@ import { speciesLabel } from "@/constants/species";
 import { Fonts } from "@/theme/fonts";
 
 export default function TripReviewScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const trip = useStrikeStore((state) => state.trips.find((item) => item.id === id));
   const deleteCompletedTrip = useStrikeStore((state) => state.deleteCompletedTrip);
@@ -141,7 +141,7 @@ export default function TripReviewScreen() {
           </Pressable>
         )}
         <Text style={styles.subtitle}>
-          {new Date(trip.startedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+          {new Date(trip.startedAt).toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })}
         </Text>
         {nearbyPrevTrip ? (
           <View style={styles.lastTimeChip}>
@@ -190,7 +190,7 @@ export default function TripReviewScreen() {
             event.type === "photo" ? t("events.photo") :
             event.type === "lure" ? t("events.lure", { name: event.comment ?? "" }) :
             t("events.contact");
-          const timeStr = new Date(event.timestamp).toLocaleTimeString([], {
+          const timeStr = new Date(event.timestamp).toLocaleTimeString(locale, {
             hour: "2-digit", minute: "2-digit"
           });
           const catchMeta = event.type === "catch" && event.lengthCm != null

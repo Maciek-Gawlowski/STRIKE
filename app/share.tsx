@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import * as Location from "expo-location";
 import { ShareCard, CARD_WIDTH, CARD_HEIGHT } from "@/components/ShareCard";
 import { getDb } from "@/database/db";
 import { getWeatherForEvent, type WeatherSnapshot } from "@/database/queries";
@@ -37,6 +38,11 @@ export default function ShareScreen() {
   });
 
   const shareCardRef = useRef<View>(null);
+  // Whether the hero photo has drawn in the off-screen capture card. Capturing
+  // before it has produced a card with an empty dark rectangle where the photo
+  // should be.
+  const photoLoadedRef = useRef(false);
+  const [placeName, setPlaceName] = useState<string | null>(null);
   const [shareCardReady, setShareCardReady] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [tripWeather, setTripWeather] = useState<WeatherSnapshot | null>(null);
@@ -131,6 +137,27 @@ export default function ShareScreen() {
     };
   }, [trip?.id]);
 
+  // Town name for the optional location line. Reverse-geocoded on the phone
+  // from where the trip started, and only ever as coarse as a town.
+  const startPoint = trip?.route[0];
+  useEffect(() => {
+    if (!showLocation || !startPoint || placeName) return;
+    let cancelled = false;
+    Location.reverseGeocodeAsync({ latitude: startPoint.latitude, longitude: startPoint.longitude })
+      .then(([geo]) => {
+        const place = geo?.city ?? geo?.district ?? geo?.subregion ?? null;
+        if (!cancelled && place) setPlaceName(place);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [showLocation, startPoint?.latitude, startPoint?.longitude, placeName]);
+
+  useEffect(() => {
+    photoLoadedRef.current = false;
+  }, [showPhotos, sharePhotoUri]);
+
   const handleShare = async () => {
     console.log("[share] tapped. sharing=", sharing, "ref=", !!shareCardRef.current, "ready=", shareCardReady);
     // Silent guard: prevents double-tap while already sharing
@@ -149,6 +176,12 @@ export default function ShareScreen() {
       console.log("[share] requiring expo-sharing…");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Sharing = require("expo-sharing") as typeof import("expo-sharing");
+      // Give the photo up to two seconds to finish drawing before capturing.
+      if (showPhotos && sharePhotoUri) {
+        for (let waited = 0; !photoLoadedRef.current && waited < 2000; waited += 100) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
       // Belt-and-suspenders: verify ref is still live before touching native
       if (!shareCardRef.current || !shareCardReady) {
         throw new Error("capture target lost between guard and captureRef");
@@ -160,7 +193,9 @@ export default function ShareScreen() {
       });
       console.log("[share] captureRef OK — uri=", uri);
       console.log("[share] calling shareAsync…");
-      await Sharing.shareAsync(uri, { mimeType: "image/jpeg" });
+      // The UTI is what makes iOS offer "Save Image" and Instagram for the
+      // file; with only a MIME type the sheet treats it as a generic document.
+      await Sharing.shareAsync(uri, { mimeType: "image/jpeg", UTI: "public.jpeg" });
       console.log("[share] shareAsync done");
     } catch (err) {
       console.error("[share] caught error:", err);
@@ -189,7 +224,7 @@ export default function ShareScreen() {
     catchesLabel: t("summary.shareCatches"),
     showRoute,
     showStats,
-    showLocation,
+    locationLabel: showLocation ? placeName ?? undefined : undefined,
     photoUri: showPhotos ? sharePhotoUri : undefined,
     profileName: showProfile ? profile?.displayName || undefined : undefined,
     profilePhotoUri: showProfile ? profile?.photoUri || undefined : undefined,
@@ -282,7 +317,13 @@ export default function ShareScreen() {
           }
         }}
       >
-        <ShareCard ref={shareCardRef} {...cardProps} />
+        <ShareCard
+          ref={shareCardRef}
+          {...cardProps}
+          onPhotoLoaded={() => {
+            photoLoadedRef.current = true;
+          }}
+        />
       </View>
     </View>
   );

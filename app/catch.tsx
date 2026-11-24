@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Animated, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ZoneBanner } from "@/components/ZoneBanner";
 import { Screen } from "@/components/Screen";
 import { getDb } from "@/database/db";
 import { getLures, type Lure } from "@/database/lures";
@@ -18,9 +19,13 @@ import { Fonts } from "@/theme/fonts";
 import { ALL_SPECIES } from "@/constants/species";
 
 export default function CatchScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const activeTrip = useStrikeStore((state) => state.activeTrip);
   const currentLocation = useStrikeStore((state) => state.currentLocation);
+  // currentLocation is pre-seeded with a demo point so other screens have
+  // something to draw; without a real fix those coordinates are not the
+  // angler's, so they must not be printed as if they were.
+  const hasGpsFix = useStrikeStore((state) => state.hasGpsFix);
   const addCatch = useStrikeStore((state) => state.addCatch);
   const weather = useStrikeStore((state) => state.weather);
   const waterLevel = useStrikeStore((state) => state.waterLevel);
@@ -152,10 +157,12 @@ export default function CatchScreen() {
         <Text style={styles.kicker}>{t("catch.kicker")}</Text>
         <Text style={styles.title}>{t("catch.title")}</Text>
         <Text style={styles.subtle}>
-          {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} /{" "}
-          {currentLocation ? `${currentLocation.latitude.toFixed(5)}, ${currentLocation.longitude.toFixed(5)}` : t("common.gpsPending")}
+          {new Date().toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })} /{" "}
+          {hasGpsFix && currentLocation ? `${currentLocation.latitude.toFixed(5)}, ${currentLocation.longitude.toFixed(5)}` : t("common.gpsPending")}
         </Text>
       </View>
+
+      <ZoneBanner />
 
       {(weather !== null || waterLevel !== null) ? (
         <View style={styles.weatherRow}>

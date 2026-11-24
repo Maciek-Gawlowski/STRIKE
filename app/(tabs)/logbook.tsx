@@ -32,7 +32,7 @@ function Metric({
 }
 
 export default function LogbookScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const trips = useStrikeStore((state) => state.trips);
 
   const groupedTrips = useMemo(() => {
@@ -42,7 +42,7 @@ export default function LogbookScreen() {
     // screen, so the two screens disagreed about the same month in front of
     // the person who fished it.
     for (const trip of trips.filter(isCountedTrip)) {
-      const key = new Date(trip.startedAt).toLocaleDateString([], { year: "numeric", month: "long" });
+      const key = new Date(trip.startedAt).toLocaleDateString(locale, { year: "numeric", month: "long" });
       const existing = groups.get(key) ?? [];
       existing.push(trip);
       groups.set(key, existing);
@@ -94,7 +94,7 @@ export default function LogbookScreen() {
                     <View style={styles.cardTop}>
                       <View style={styles.cardTitleWrap}>
                         <Text style={styles.date} numberOfLines={2}>{trip.title}</Text>
-                        <Text style={styles.place}>{new Date(trip.startedAt).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</Text>
+                        <Text style={styles.place}>{new Date(trip.startedAt).toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" })}</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                     </View>

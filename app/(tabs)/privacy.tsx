@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { appBuild, appVersion } from "@/services/appInfo";
+import { exportData, type ExportFormat } from "@/services/dataExport";
 import { subscribeSyncStatus, type SyncStatus } from "@/services/syncStatus";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -51,7 +52,7 @@ const LANGUAGE_OPTIONS: { value: Locale; labelKey: string }[] = [
 const FISHING_METHOD_KEYS = ["spin", "flue", "medefiskeri", "andet"] as const;
 const FISHING_LOCATION_KEYS = ["kyst", "aa", "soe", "putOgTake"] as const;
 
-import { FRESHWATER_SPECIES, SALTWATER_SPECIES } from "@/constants/species";
+import { FRESHWATER_SPECIES, SALTWATER_SPECIES, speciesLabel } from "@/constants/species";
 
 type LureFormState = {
   name: string;
@@ -105,6 +106,30 @@ export default function ProfileScreen() {
   // for why it lives in the UI rather than in a log file nobody can open.
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [erasing, setErasing] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+
+  const runExport = async (format: ExportFormat) => {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      const db = await getDb();
+      const shared = await exportData(db, format, {
+        locale,
+        appVersion: String(appVersion),
+        dialogTitle: t("settings.exportDialogTitle"),
+        labels: {
+          species: (key) => speciesLabel(key, t) || key,
+          type: (key) => t(`events.${key}`, { defaultValue: key })
+        }
+      });
+      if (!shared) Alert.alert(t("settings.exportFailedTitle"), t("settings.exportUnavailable"));
+    } catch (error) {
+      console.warn("[strike/export] failed", error);
+      Alert.alert(t("settings.exportFailedTitle"), t("settings.exportFailedBody"));
+    } finally {
+      setExporting(null);
+    }
+  };
   const eraseAllData = useStrikeStore((state) => state.eraseAllData);
   useEffect(() => subscribeSyncStatus(setSyncStatus), []);
 
@@ -597,6 +622,34 @@ export default function ProfileScreen() {
 
       <Text style={styles.subSectionTitle}>{t("settings.yourData")}</Text>
       <View style={styles.panel}>
+        {/* Export sits above erase on purpose: the moment someone thinks about
+            deleting everything is the moment they should be offered a copy. */}
+        <Text style={styles.biteMapInfo}>{t("settings.exportExplain")}</Text>
+        <Pressable
+          style={styles.introButton}
+          disabled={exporting !== null}
+          onPress={() => void runExport("csv")}
+        >
+          <Ionicons
+            name={exporting === "csv" ? "hourglass-outline" : "document-text-outline"}
+            size={20}
+            color={Colors.text}
+          />
+          <Text style={styles.introButtonText}>{t("settings.exportCsv")}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.introButton}
+          disabled={exporting !== null}
+          onPress={() => void runExport("json")}
+        >
+          <Ionicons
+            name={exporting === "json" ? "hourglass-outline" : "archive-outline"}
+            size={20}
+            color={Colors.text}
+          />
+          <Text style={styles.introButtonText}>{t("settings.exportJson")}</Text>
+        </Pressable>
+        <View style={styles.dataDivider} />
         <Text style={styles.biteMapInfo}>{t("settings.eraseExplain")}</Text>
         <Pressable
           style={styles.eraseBtn}
@@ -668,6 +721,7 @@ const styles = StyleSheet.create({
   syncDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.textMuted },
   syncLabel: { flex: 1, color: Colors.text, fontFamily: Fonts.bodySemibold, fontSize: 13, letterSpacing: 0 },
   syncDetail: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 11, lineHeight: 16, marginTop: 8 },
+  dataDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   panel: { borderRadius: 16, padding: 16, gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
 
   photoSection: { flexDirection: "row", alignItems: "center", gap: 16 },

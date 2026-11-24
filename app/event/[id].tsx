@@ -80,7 +80,7 @@ function parseNum(s: string): number | undefined {
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
 
   /**
    * The trip holding this event. Everything else on this screen is derived
@@ -281,10 +281,10 @@ export default function EventDetailScreen() {
     event.type.toUpperCase();
 
   const miniRoute = [event.position, event.position];
-  const dateStr = new Date(event.timestamp).toLocaleDateString([], {
+  const dateStr = new Date(event.timestamp).toLocaleDateString(locale, {
     day: "numeric", month: "short", year: "numeric"
   });
-  const timeStr = new Date(event.timestamp).toLocaleTimeString([], {
+  const timeStr = new Date(event.timestamp).toLocaleTimeString(locale, {
     hour: "2-digit", minute: "2-digit"
   });
   const coordStr = `${event.position.latitude.toFixed(5)}, ${event.position.longitude.toFixed(5)}`;

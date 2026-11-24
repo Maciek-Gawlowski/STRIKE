@@ -10,6 +10,7 @@ import { LureColourDot } from "@/components/LureColourDot";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
 import { SpeciesPrompt } from "@/components/SpeciesPrompt";
+import { ZoneBanner } from "@/components/ZoneBanner";
 import { TripMap } from "@/components/TripMap";
 import { formatDistance, formatDuration, useStrikeStore, type StrikeEvent } from "@/store/useStrikeStore";
 import { getDb } from "@/database/db";
@@ -30,6 +31,7 @@ const MAP_TYPE_LABEL_KEY: Record<MapType, string> = {
 export default function MapScreen() {
   const { t } = useTranslation();
   const activeTrip = useStrikeStore((state) => state.activeTrip);
+  const hasGpsFix = useStrikeStore((state) => state.hasGpsFix);
   const currentLocation = useStrikeStore((state) => state.currentLocation);
   const addEvent = useStrikeStore((state) => state.addEvent);
   const addCatch = useStrikeStore((state) => state.addCatch);
@@ -166,13 +168,17 @@ export default function MapScreen() {
         <Text style={styles.title}>{activeTrip.title}</Text>
       </View>
 
+      <ZoneBanner />
+
       <TripMap
         route={activeTrip.route}
         events={activeTrip.events}
         height={390}
         mapType={mapType}
         isActive
-        currentLocation={currentLocation ?? undefined}
+        // Before the first fix currentLocation is a demo point near Stevns;
+        // drawing the "you are here" dot there put anglers in the wrong place.
+        currentLocation={hasGpsFix ? currentLocation ?? undefined : undefined}
         showProtectionZones
       />
 

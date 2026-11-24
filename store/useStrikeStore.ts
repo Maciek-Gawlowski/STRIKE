@@ -7,6 +7,7 @@ import {
   getCompletedTrips,
   insertWeatherSnapshot,
   queueBiteMapDelete,
+  queueBiteMapUpload,
   renameTripInDb,
   saveTripWithEvents,
   updateTripLure,
@@ -28,7 +29,13 @@ import {
   syncPendingWeather,
   type WeatherData
 } from "@/services/weather";
-import { deleteBiteMapEvents, flushBiteMapDeleteQueue, resyncBiteMapEvent, uploadBiteMapEvent } from "@/services/biteMap";
+import {
+  deleteBiteMapEvents,
+  flushBiteMapDeleteQueue,
+  flushBiteMapUploadQueue,
+  resyncBiteMapEvent,
+  uploadBiteMapEvent
+} from "@/services/biteMap";
 import { flushFeedbackQueue } from "@/services/feedback";
 import { eraseAllLocalData } from "@/database/queries";
 import { clearAllPreferences } from "@/database/preferences";
@@ -276,6 +283,10 @@ const fallbackPoint = (state: StrikeState) => {
  */
 const MAX_PLAUSIBLE_SPEED_MS = 8;
 
+/** Event types that count as fishing activity on the shared map. */
+const ACTIVITY_EVENT_TYPES = new Set(["contact", "following", "catch"]);
+const isActivityEvent = (type: string) => ACTIVITY_EVENT_TYPES.has(type);
+
 /** Wall-clock time of the last route point, for the speed check above. */
 let lastRoutePointAt: number | null = null;
 
@@ -320,6 +331,10 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     void markTripBackgrounded();
   },
   noteAppForegrounded: () => {
+    // Coming back to the app is the likeliest moment to have signal again.
+    void getDb()
+      .then((db) => flushBiteMapDeleteQueue(db).then(() => flushBiteMapUploadQueue(db)))
+      .catch(() => undefined);
     if (!get().activeTrip) {
       set({ backgroundGapSeconds: 0 });
       return;
@@ -546,8 +561,15 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     // first fix lands) sit on the demo start point or a synthesised fallback.
     // Uploading those would put permanent phantom activity on the community map
     // roughly 100 km from Als, so they stay local-only.
-    if (type !== "photo" && state.hasGpsFix) {
-      void uploadBiteMapEvent(event, h3Cell, state.weather);
+    // Only the three observation types are activity. "lure" (a lure change)
+    // and "photo" are timeline entries; uploading lure changes used to count
+    // every swap of a spoon as fishing activity on the shared map.
+    if (isActivityEvent(type) && state.hasGpsFix) {
+      // No signal on the beach is the normal case, not an error: queue it and
+      // send it the next time the app starts or comes back to the foreground.
+      void uploadBiteMapEvent(event, h3Cell, state.weather).then((ok) => {
+        if (!ok) enqueueWrite((db) => queueBiteMapUpload(db, event.id));
+      });
     }
 
     return event;
@@ -655,7 +677,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       }
       // "lure" and "photo" events are never activity signals and are never
       // uploaded by addEvent — resync must not smuggle them onto the map either.
-      if (opts?.resyncBiteMap && updatedEvent.type !== "lure" && updatedEvent.type !== "photo") {
+      if (opts?.resyncBiteMap && isActivityEvent(updatedEvent.type)) {
         const h3Cell = latLngToCell(updatedEvent.position.latitude, updatedEvent.position.longitude);
         const combinedWeather: WeatherSnapshot | null = opts.existingWeather
           ? { ...opts.existingWeather, ...opts.weatherPatch }
@@ -727,7 +749,8 @@ export async function hydrateStore(): Promise<void> {
 
   try {
     const db = await getDb();
-    void flushBiteMapDeleteQueue(db);
+    // Deletes before uploads, so a trip deleted offline cannot be re-sent.
+    void flushBiteMapDeleteQueue(db).then(() => flushBiteMapUploadQueue(db));
     void flushFeedbackQueue(db);
 
     // Seed demo trips in development only. A tester's first launch must show an

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Animated, AppState, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ActionButton } from "@/components/ActionButton";
 import { AnimatedCounter } from "@/components/AnimatedCounter";
+import { ZoneBanner } from "@/components/ZoneBanner";
 import { GlassCard } from "@/components/GlassCard";
 import { LureColourDot } from "@/components/LureColourDot";
 import { Screen } from "@/components/Screen";
@@ -88,7 +89,7 @@ const TRIP_WARN_MS     = 6  * 60 * 60 * 1000; // 6 h — prompt user
 const TRIP_AUTO_STOP_MS = 12 * 60 * 60 * 1000; // 12 h — auto-stop
 
 export default function HomeScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const activeTrip = useStrikeStore((state) => state.activeTrip);
   const currentLocation = useStrikeStore((state) => state.currentLocation);
   const hasGpsFix = useStrikeStore((state) => state.hasGpsFix);
@@ -219,7 +220,7 @@ export default function HomeScreen() {
         const place = geo?.city ?? geo?.subregion ?? geo?.street ?? "";
         if (place) {
           const d = new Date();
-          const dateStr = d.toLocaleDateString([], { day: "numeric", month: "short" });
+          const dateStr = d.toLocaleDateString(locale, { day: "numeric", month: "short" });
           defaultTitle = `${place} · ${dateStr}`;
         }
       } catch { /* fall through to empty, user can type a name */ }
@@ -397,13 +398,16 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Fredningsbælte warning during a trip — renders nothing otherwise. */}
+      <ZoneBanner />
+
       {/* ── Stale-trip recovery banner ── */}
       {recoveredStaleTrip ? (
         <GlassCard style={styles.recoverBanner}>
           <Text style={styles.recoverTitle}>{t("home.recoverTitle")}</Text>
           <Text style={styles.recoverBody}>
             {t("home.recoverBody", {
-              date: new Date(recoveredStaleTrip.startedAt).toLocaleDateString([], {
+              date: new Date(recoveredStaleTrip.startedAt).toLocaleDateString(locale, {
                 weekday: "short",
                 month: "short",
                 day: "numeric"
@@ -508,7 +512,7 @@ export default function HomeScreen() {
                 height={150}
                 interactive={false}
                 isActive={!!activeTrip}
-                currentLocation={activeTrip ? currentLocation ?? undefined : undefined}
+                currentLocation={activeTrip && hasGpsFix ? currentLocation ?? undefined : undefined}
                 vignette
               />
             ) : null}
@@ -609,7 +613,7 @@ export default function HomeScreen() {
                     <Text style={styles.tripName} numberOfLines={1}>{trip.title}</Text>
                     <Text style={styles.tripMeta} numberOfLines={1}>
                       {[
-                        new Date(trip.startedAt).toLocaleDateString([], { month: "short", day: "numeric" }),
+                        new Date(trip.startedAt).toLocaleDateString(locale, { month: "short", day: "numeric" }),
                         t("logbook.catchesCount", { count: catches }),
                         t("logbook.contactsCount", { count: contacts })
                       ].join("  ·  ")}

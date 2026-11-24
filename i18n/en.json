@@ -411,7 +411,14 @@
     "syncUnconfigured": "This build has no server connection. Nothing is being shared, and the Activity Map stays empty.",
     "syncUnknown": "Nothing sent yet. Register a catch or contact and this will update.",
     "syncReadOnly": "The server is reachable, but nothing has been sent from this phone yet.",
-    "build": "Build"
+    "build": "Build",
+    "exportExplain": "Take a copy of your trips and observations. Nothing is sent anywhere — you choose where the file goes. Photos stay on the phone.",
+    "exportCsv": "Export as spreadsheet (CSV)",
+    "exportJson": "Export full backup (JSON)",
+    "exportDialogTitle": "Export STRIKE data",
+    "exportFailedTitle": "Export failed",
+    "exportFailedBody": "The file could not be created. Try again, and send us feedback if it keeps failing.",
+    "exportUnavailable": "Sharing is not available on this device."
   },
   "onboarding": {
     "skip": "Skip",
@@ -455,8 +462,8 @@
     "title": "Share trip",
     "togglePhotos": "Include photo",
     "toggleRoute": "Include route map",
-    "toggleLocation": "Include exact location",
-    "toggleLocationHint": "Off by default — keeps your spot private",
+    "toggleLocation": "Include town name",
+    "toggleLocationHint": "Only the town, never the spot",
     "toggleStats": "Include stats",
     "shareBtn": "Share to...",
     "preparing": "Preparing...",
@@ -531,6 +538,12 @@
     "filterEventType": "Activity type",
     "filterMapType": "Map type",
     "emptyWithOwn": "No shared activity here yet — the amber marks are your own catches. A zone appears once several anglers have reported from it.",
+    "loadFailed": "Couldn't reach the shared map right now. Pull down to try again.",
+    "emptyFiltered": "Nothing matches your filters in this period. Filters are remembered between visits.",
+    "clearFilters": "Clear filters",
+    "retry": "Try again",
+    "staleData": "Offline — showing the map from {{time}}",
+    "customRangeInvalid": "Use DD/MM/YYYY, and the start date must be before the end date.",
     "ownLayer": "Your observations",
     "layerOwn": "My catches",
     "layerCommunity": "Community",
@@ -559,5 +572,20 @@
     "waningGibbous": "Waning gibbous",
     "lastQuarter": "Last quarter",
     "waningCrescent": "Waning crescent"
+  },
+  "zones": {
+    "closed": "Protection zone",
+    "openToday": "Protection zone — not active today",
+    "period": "Period",
+    "law": "Legal basis",
+    "readRule": "Read the rule",
+    "close": "Close",
+    "understood": "Got it",
+    "insideTitle": "Protection zone: {{name}}",
+    "insideBody": "Your position is inside a protection zone (fredningsbælte) that is closed today. Check the rule before you fish here.",
+    "alsoIn": "Also inside: {{names}}",
+    "bannerInside": "In protection zone: {{name}}",
+    "bannerNear": "{{distance}} m from protection zone: {{name}}",
+    "bannerTap": "Tap for period and rule"
   }
 }

@@ -20,7 +20,7 @@ import { speciesLabel } from "@/constants/species";
 import { Fonts } from "@/theme/fonts";
 
 export default function SummaryScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const trips = useStrikeStore((state) => state.trips);
   const lastCompletedTripId = useStrikeStore((state) => state.lastCompletedTripId);
   const mapType = useStrikeStore((state) => state.mapType);
@@ -113,7 +113,7 @@ export default function SummaryScreen() {
   const contacts = trip.events.filter((e) => e.type === "contact").length;
   const catches = trip.events.filter((e) => e.type === "catch");
 
-  const dateStr = new Date(trip.startedAt).toLocaleDateString([], {
+  const dateStr = new Date(trip.startedAt).toLocaleDateString(locale, {
     weekday: "long",
     month: "short",
     day: "numeric",

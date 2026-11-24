@@ -327,6 +327,66 @@ export async function clearBiteMapDeleteQueue(db: SQLiteDatabase, eventIds: stri
   }
 }
 
+// --- Activity Map upload queue ---------------------------------------------
+
+export async function queueBiteMapUpload(db: SQLiteDatabase, eventId: string): Promise<void> {
+  await db.runAsync(
+    "INSERT OR IGNORE INTO bite_map_upload_queue (local_event_id, queued_at) VALUES (?, ?);",
+    [eventId, new Date().toISOString()]
+  );
+}
+
+export async function getBiteMapUploadQueue(
+  db: SQLiteDatabase
+): Promise<{ eventId: string; queuedAt: string }[]> {
+  const rows = await db.getAllAsync<{ local_event_id: string; queued_at: string }>(
+    "SELECT local_event_id, queued_at FROM bite_map_upload_queue ORDER BY queued_at ASC;"
+  );
+  return rows.map((r) => ({ eventId: r.local_event_id, queuedAt: r.queued_at }));
+}
+
+export async function clearBiteMapUploadQueueItem(db: SQLiteDatabase, eventId: string): Promise<void> {
+  await db.runAsync("DELETE FROM bite_map_upload_queue WHERE local_event_id = ?;", [eventId]);
+}
+
+/** What the Activity Map needs to know about one stored observation. */
+export type UploadableEvent = {
+  id: string;
+  type: string;
+  timestamp: string;
+  species: string | null;
+  h3Cell: string | null;
+  windDirection: string | null;
+  waterTemp: number | null;
+};
+
+export async function getEventForUpload(db: SQLiteDatabase, eventId: string): Promise<UploadableEvent | null> {
+  const row = await db.getFirstAsync<{
+    id: string;
+    type: string;
+    timestamp: string;
+    species: string | null;
+    h3_cell: string | null;
+    wind_direction: string | null;
+    water_temp: number | null;
+  }>(
+    `SELECT e.id, e.type, e.timestamp, e.species, e.h3_cell, w.wind_direction, w.water_temp
+       FROM events e LEFT JOIN weather_snapshots w ON w.event_id = e.id
+      WHERE e.id = ? LIMIT 1;`,
+    [eventId]
+  );
+  if (!row) return null;
+  return {
+    id: row.id,
+    type: row.type,
+    timestamp: row.timestamp,
+    species: row.species,
+    h3Cell: row.h3_cell,
+    windDirection: row.wind_direction,
+    waterTemp: row.water_temp
+  };
+}
+
 // --- Feedback queue ---------------------------------------------------------
 
 export type FeedbackData = {
@@ -678,6 +738,7 @@ export async function eraseAllLocalData(db: SQLiteDatabase): Promise<void> {
     DELETE FROM events;
     DELETE FROM trips;
     DELETE FROM bite_map_delete_queue;
+    DELETE FROM bite_map_upload_queue;
     DELETE FROM feedback_queue;
     DELETE FROM spots;
     DELETE FROM lures;

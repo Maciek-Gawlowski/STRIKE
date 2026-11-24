@@ -525,8 +525,8 @@ function AvgTile({ value, label }: { value: string; label: string }) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function timeOfDayKey(range: string): string {
@@ -542,7 +542,7 @@ function timeOfDayKey(range: string): string {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function StatsScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const trips = useStrikeStore((state) => state.trips);
   const activeTrip = useStrikeStore((state) => state.activeTrip);
   const [stats, setStats] = useState<Statistics | null>(null);
@@ -577,7 +577,7 @@ export default function StatsScreen() {
     return Array.from({ length: N_MONTHS }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (N_MONTHS - 1 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString([], { month: "short" });
+      const label = d.toLocaleDateString(locale, { month: "short" });
       const catches   = allEvents.filter((e) => e.type === "catch"     && e.timestamp.startsWith(key)).length;
       const contacts  = allEvents.filter((e) => e.type === "contact"   && e.timestamp.startsWith(key)).length;
       const following = allEvents.filter((e) => e.type === "following" && e.timestamp.startsWith(key)).length;
@@ -871,7 +871,7 @@ export default function StatsScreen() {
                 <Ionicons name="footsteps-outline" size={18} color={Colors.textMuted} />
                 <View style={styles.recordText}>
                   <Text style={styles.recordRowLabel}>{t("stats.longestTrip")}</Text>
-                  <Text style={styles.recordRowDate}>{formatDate(stats.longestTrip.date)}</Text>
+                  <Text style={styles.recordRowDate}>{formatDate(stats.longestTrip.date, locale)}</Text>
                 </View>
                 <Text style={styles.recordRowValue}>
                   {stats.longestTrip.distance.toFixed(2)} km / {stats.longestTrip.duration}
@@ -884,7 +884,7 @@ export default function StatsScreen() {
                 <Ionicons name="fish-outline" size={18} color={Colors.textMuted} />
                 <View style={styles.recordText}>
                   <Text style={styles.recordRowLabel}>{t("stats.bestTrip")}</Text>
-                  <Text style={styles.recordRowDate}>{formatDate(stats.bestTrip.date)}</Text>
+                  <Text style={styles.recordRowDate}>{formatDate(stats.bestTrip.date, locale)}</Text>
                 </View>
                 <Text style={styles.recordRowValue}>
                   {t("stats.bestTripValue", {

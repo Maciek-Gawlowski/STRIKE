@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TripWatcher } from "@/components/TripWatcher";
+import { ZoneWatcher } from "@/components/ZoneWatcher";
 import { Colors } from "@/theme/colors";
 
 // Keep the native splash up only until the first mount, then drop it.
@@ -77,6 +78,7 @@ export default function RootLayout() {
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <TripWatcher />
+        <ZoneWatcher />
         <StatusBar style="light" />
         <Stack
           screenOptions={{

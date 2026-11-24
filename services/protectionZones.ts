@@ -142,6 +142,80 @@ function pointInRing(lng: number, lat: number, ring: number[][]): boolean {
   return inside;
 }
 
+/** Metres from a point to the nearest edge of one ring, on a local flat projection. */
+function distanceToRingM(lng: number, lat: number, ring: number[][]): number {
+  // Equirectangular around the point: at the scale of a stream mouth the error
+  // is centimetres, and it keeps this cheap enough to run on every GPS fix.
+  const kx = 111320 * Math.cos((lat * Math.PI) / 180);
+  const ky = 111132;
+  let best = Infinity;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ax = (ring[j][0] - lng) * kx;
+    const ay = (ring[j][1] - lat) * ky;
+    const bx = (ring[i][0] - lng) * kx;
+    const by = (ring[i][1] - lat) * ky;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lengthSq = dx * dx + dy * dy;
+    // Projection of the origin (the angler) onto segment a→b, clamped to it.
+    const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSq));
+    const d = Math.hypot(ax + t * dx, ay + t * dy);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+export type ZoneProximity = { zone: ProtectionZone; distanceM: number };
+
+export type ZoneStatus = {
+  /** Zones closed today that contain the position. */
+  inside: ProtectionZone[];
+  /** The nearest zone closed today within `nearM`, if the angler is not inside one. */
+  near: ZoneProximity | null;
+};
+
+/**
+ * Where the angler stands relative to the zones closed today.
+ *
+ * "Near" exists because the boundaries are simplified by up to ~37 m (see the
+ * top of this file) and a phone's own fix wanders by 10 m or more. A warning
+ * that only fires once the dot is inside the drawn line fires late for exactly
+ * the people standing on the edge — the ones who need it.
+ */
+export function zoneStatusAt(
+  latitude: number,
+  longitude: number,
+  nearM = 100,
+  date: Date = new Date(),
+  zones: ProtectionZone[] = loadZones()
+): ZoneStatus {
+  const inside = zonesAtPosition(latitude, longitude, date, zones);
+  if (inside.length > 0) return { inside, near: null };
+
+  const padLat = nearM / 111132;
+  const padLng = nearM / (111320 * Math.cos((latitude * Math.PI) / 180));
+  let near: ZoneProximity | null = null;
+
+  for (const zone of zones) {
+    const [west, south, east, north] = zone.bbox;
+    if (
+      longitude < west - padLng ||
+      longitude > east + padLng ||
+      latitude < south - padLat ||
+      latitude > north + padLat
+    ) {
+      continue;
+    }
+    if (!isZoneActive(zone, date)) continue;
+    for (const { outer } of zone.polygons) {
+      const d = distanceToRingM(longitude, latitude, outer);
+      if (d <= nearM && (!near || d < near.distanceM)) near = { zone, distanceM: d };
+    }
+  }
+
+  return { inside: [], near };
+}
+
 /**
  * Which zones contain this position, counting only ones closed today.
  *

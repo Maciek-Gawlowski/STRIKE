@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Alert, Linking } from "react-native";
 import { Polygon } from "react-native-maps";
+import { useTranslation } from "@/i18n";
 import { isZoneActive, loadZones, type ProtectionZone } from "@/services/protectionZones";
 
 /**
@@ -55,11 +56,27 @@ type Props = {
   labels?: ZoneLabels;
 };
 
-export function ProtectionZoneLayer({ date, labels = DA }: Props) {
+export function ProtectionZoneLayer({ date, labels }: Props) {
+  // The popup used to be Danish for everyone: TripMap accepts labels but no
+  // caller ever passed any. Take them from the app language instead. Read via
+  // a ref so a language switch updates the text without touching the polygon
+  // list, which must never re-mount (see above).
+  const { t } = useTranslation();
+  const labelsRef = useRef<ZoneLabels>(DA);
+  labelsRef.current = labels ?? {
+    closed: t("zones.closed"),
+    open: t("zones.openToday"),
+    period: t("zones.period"),
+    law: t("zones.law"),
+    readRule: t("zones.readRule"),
+    dismiss: t("zones.close")
+  };
+
   const polygons = useMemo(() => {
     const when = date ?? new Date();
 
     const describe = (zone: ProtectionZone, active: boolean) => {
+      const labels = labelsRef.current;
       const lines = [`${labels.period}: ${zone.periodText || "—"}`];
       if (zone.law) lines.push(`${labels.law}: ${zone.law}`);
 

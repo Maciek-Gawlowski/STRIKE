@@ -3,7 +3,17 @@ import * as Location from "expo-location";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { GlassCard } from "@/components/GlassCard";
@@ -12,7 +22,14 @@ import { Screen } from "@/components/Screen";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
 import { getDb } from "@/database/db";
-import { getBiteMapData, type BiteMapFilter, type HexActivity } from "@/services/biteMap";
+import {
+  biteMapCacheKey,
+  getBiteMapData,
+  readBiteMapCache,
+  writeBiteMapCache,
+  type BiteMapFilter,
+  type HexActivity
+} from "@/services/biteMap";
 import type { MapRegion } from "@/services/heatmapGeo";
 import { cellToPolygon, latLngToCell } from "@/services/hexGrid";
 import { EVENT_MARKER_COLORS, EVENT_MARKER_ICONS, dominantEventType } from "@/components/eventMarkers";
@@ -99,6 +116,38 @@ function parseDMY(s: string): Date | null {
 
 type SpotForm = { id?: string; lat: number; lng: number; name: string; note: string };
 
+/**
+ * The angler's own events and routes in the map's window. Read straight from
+ * the local database and never filtered by species or event type: those
+ * filters exist to narrow other people's activity, and silently hiding the
+ * user's own catches behind them is how the map came to look empty before.
+ */
+async function loadOwnLayer(
+  filter: BiteMapFilter
+): Promise<{ own: OwnEvent[]; routes: OwnTripRoute[] } | null> {
+  try {
+    const db = await getDb();
+    const [own, routes] = await Promise.all([
+      getOwnEventsInWindow(db, filter.since, filter.until ?? null),
+      getOwnTripRoutesInWindow(db, filter.since, filter.until ?? null)
+    ]);
+    return { own, routes };
+  } catch (error) {
+    // A failed local read must not blank the shared map — but it must not be
+    // invisible either. A silent catch around a database read is how this
+    // project hid a schema mismatch for weeks while the app looked fine.
+    console.warn("[strike/map] personal layer read failed", error);
+    return null;
+  }
+}
+
+function formatUpdatedAt(iso: string, locale: string): string {
+  const date = new Date(iso);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  const time = date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return sameDay ? time : `${date.toLocaleDateString(locale, { day: "numeric", month: "short" })} ${time}`;
+}
+
 function subLabel(mode: TimeMode, t: (key: string) => string, customRange?: string): string {
   if (mode === "24h") return t("bitemap.sub24");
   if (mode === "30d") return t("bitemap.sub30");
@@ -147,7 +196,7 @@ function inViewport(lat: number, lng: number, region: MapRegion): boolean {
 }
 
 export default function BiteMapScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const mapType = useStrikeStore((state) => state.mapType);
   const setMapType = useStrikeStore((state) => state.setMapType);
 
@@ -161,6 +210,7 @@ export default function BiteMapScreen() {
   const [customTo, setCustomTo] = useState("");
   const [customSince, setCustomSince] = useState<string | null>(null);
   const [customUntil, setCustomUntil] = useState<string | null>(null);
+  const [customError, setCustomError] = useState(false);
   // No species filter by default. The server reads a species as "catches of
   // that species only", so defaulting to one hid every follow and contact and
   // left a fresh install staring at an empty map — which is exactly what a
@@ -183,7 +233,26 @@ export default function BiteMapScreen() {
   const [eventTypeFilter, setEventTypeFilter] = useState<string[]>([]);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [hexes, setHexes] = useState<HexActivity[]>([]);
+  // True when the last community read failed. The previous cells stay on the
+  // map; this only decides which message the empty state shows.
+  const [communityFailed, setCommunityFailed] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Sticky filters are restored from AsyncStorage after the first render. Until
+  // they are, no load may start: otherwise the default-filter request and the
+  // restored-filter request race, and whichever answers last wins.
+  const [prefsReady, setPrefsReady] = useState(false);
+  // Every load gets a number; only the newest one may write state. Mount, tab
+  // focus and filter restore all fire loads within milliseconds of each other,
+  // and the network does not answer them in order.
+  const loadSeq = useRef(0);
+  // Which view (window + filters) the cells on screen belong to.
+  const viewKeyRef = useRef<string | null>(null);
+  // A request for community cells is in flight. Shown as a small spinner on the
+  // map, never as a blocking state: cached cells stay visible underneath.
+  const [fetching, setFetching] = useState(false);
+  // When the cells on screen were fetched. Shown only when a refresh failed, so
+  // an angler offline on the coast knows how old the map in front of them is.
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
@@ -288,32 +357,48 @@ export default function BiteMapScreen() {
       species: species || null,
       eventTypes: eventTypes.length > 0 ? eventTypes : undefined,
     };
-    const data = await getBiteMapData(filter);
-    setHexes(data);
+    const seq = ++loadSeq.current;
+    const isCurrent = () => seq === loadSeq.current;
+    const cacheKey = biteMapCacheKey(mode, species, eventTypes, since, until);
+    const viewChanged = cacheKey !== viewKeyRef.current;
+    viewKeyRef.current = cacheKey;
 
-    // The personal layer uses the same window as the shared one, so the two
-    // always describe the same stretch of time. It is read straight from the
-    // local database and never filtered by species or event type: those
-    // filters exist to narrow other people's activity, and silently hiding
-    // the user's own catches behind them is how the map came to look empty
-    // in the first place.
-    try {
-      const db = await getDb();
-      const [own, routes] = await Promise.all([
-        getOwnEventsInWindow(db, filter.since, filter.until ?? null),
-        getOwnTripRoutesInWindow(db, filter.since, filter.until ?? null)
-      ]);
-      console.log(
-        `[strike/map] personal layer: ${own.length} own events, ${routes.length} routes since ${filter.since}`
-      );
-      setOwnEvents(own);
-      setOwnRoutes(routes);
-    } catch (error) {
-      // A failed local read must not blank the shared map — but it must not be
-      // invisible either. A silent catch around a database read is how this
-      // project hid a schema mismatch for weeks while the app looked fine.
-      console.warn("[strike/map] personal layer read failed", error);
+    // The personal layer is local, so it never waits for the network. It used
+    // to load only after the server answered, which on one bar of signal meant
+    // the angler's own catches appeared seconds after an empty map.
+    const ownLayer = loadOwnLayer(filter).then((result) => {
+      if (!result || !isCurrent()) return;
+      setOwnEvents(result.own);
+      setOwnRoutes(result.routes);
+    });
+
+    // Draw the last good answer for this view at once, so the tab never opens
+    // blank and a different view never shows the previous view's cells.
+    const cached = await readBiteMapCache(cacheKey);
+    if (!isCurrent()) return;
+    if (cached) {
+      setHexes(cached.cells);
+      setUpdatedAt(cached.at);
+    } else if (viewChanged) {
+      setHexes([]);
+      setUpdatedAt(null);
     }
+
+    setFetching(true);
+    const data = await getBiteMapData(filter);
+    // A newer load has started since this one; its answer is the one to show.
+    if (!isCurrent()) return;
+    setFetching(false);
+    if (data === null) {
+      // Failed read: keep whatever is on screen rather than blanking it.
+      setCommunityFailed(true);
+    } else {
+      setHexes(data);
+      setCommunityFailed(false);
+      const at = await writeBiteMapCache(cacheKey, data);
+      if (isCurrent()) setUpdatedAt(at);
+    }
+    await ownLayer;
   }, []);
 
   // Restore sticky filter prefs on mount
@@ -330,20 +415,35 @@ export default function BiteMapScreen() {
           } catch { /* ignore */ }
         }
       })
-      .catch(() => null);
+      .catch(() => null)
+      .finally(() => setPrefsReady(true));
   }, []);
 
-  useEffect(() => {
-    if (timeMode === "custom") return;
-    setLoading(true);
-    load(timeMode, null, null, speciesFilter, eventTypeFilter).finally(() => setLoading(false));
-  }, [timeMode, speciesFilter, eventTypeFilter, load]);
-
-  // Reload on tab focus so catches logged on other screens appear immediately.
+  /*
+   * One loader for every reason to load: the tab gaining focus (so catches
+   * logged on other screens appear) and any filter or window changing while
+   * it is focused — useFocusEffect re-runs when its callback changes. There
+   * used to be a useEffect AND a focus effect with the same dependencies, so
+   * every filter tap sent two requests that then raced each other.
+   *
+   * Custom ranges go through here too. They used to be skipped, so changing a
+   * species filter while looking at a custom range silently did nothing.
+   */
   useFocusEffect(useCallback(() => {
-    if (timeMode === "custom") return;
-    load(timeMode, null, null, speciesFilter, eventTypeFilter).catch(() => null);
-  }, [timeMode, speciesFilter, eventTypeFilter, load]));
+    if (!prefsReady) return;
+    const isCustom = timeMode === "custom";
+    if (isCustom && !(customSince && customUntil)) return;
+    setLoading(true);
+    load(
+      timeMode,
+      isCustom ? customSince : null,
+      isCustom ? customUntil : null,
+      speciesFilter,
+      eventTypeFilter
+    )
+      .catch(() => null)
+      .finally(() => setLoading(false));
+  }, [prefsReady, timeMode, customSince, customUntil, speciesFilter, eventTypeFilter, load]));
 
   // Load spots
   useEffect(() => {
@@ -367,11 +467,20 @@ export default function BiteMapScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load(timeMode, customSince, customUntil, speciesFilter, eventTypeFilter);
+    // The custom range only applies in custom mode. Pull-to-refresh used to
+    // pass it in every mode, so after one custom lookup a refresh on "30 days"
+    // quietly fetched the old custom range under the 30-day label.
+    const isCustom = timeMode === "custom";
+    await load(
+      timeMode,
+      isCustom ? customSince : null,
+      isCustom ? customUntil : null,
+      speciesFilter,
+      eventTypeFilter
+    ).catch(() => null);
     setRefreshing(false);
   }, [timeMode, customSince, customUntil, speciesFilter, eventTypeFilter, load]);
 
-  const totalActivity = hexes.reduce((sum, h) => sum + h.total, 0);
   const visibleActivity = hexes.filter((h) => h.total >= MIN_CELL_OBSERVATIONS).length;
   const selectedHex = hexes.find((h) => h.h3_cell === selectedCell) ?? null;
 
@@ -474,6 +583,20 @@ export default function BiteMapScreen() {
     [hexes]
   );
 
+  /*
+   * The numbered hotspot badges had tracksViewChanges pinned to false from
+   * their first render — the exact mistake trackOwnMarkers was written to
+   * undo. react-native-maps snapshots the view before it is laid out and keeps
+   * the empty snapshot, so a badge could draw as nothing at all. Same cure:
+   * track briefly whenever the set of badges changes, then stop.
+   */
+  const [trackHotspots, setTrackHotspots] = useState(true);
+  useEffect(() => {
+    setTrackHotspots(true);
+    const timer = setTimeout(() => setTrackHotspots(false), 1000);
+    return () => clearTimeout(timer);
+  }, [hotspots]);
+
   const handleMapPress = useCallback(
     (event: {
       nativeEvent: { coordinate: { latitude: number; longitude: number }; action?: string };
@@ -484,6 +607,12 @@ export default function BiteMapScreen() {
       // Tapping the map background clears spot selection and looks for a hex.
       setSelectedSpot(null);
       setSpotForm(null);
+      // With the community layer switched off there is nothing visible to
+      // select, so a tap must not open a card for an invisible cell.
+      if (!showCommunityLayer) {
+        setSelectedCell(null);
+        return;
+      }
       const { latitude, longitude } = event.nativeEvent.coordinate;
       const threshold = mapSize.height > 0
         ? (40 / mapSize.height) * liveRegion.latitudeDelta
@@ -499,7 +628,7 @@ export default function BiteMapScreen() {
       }
       setSelectedCell(nearestCell);
     },
-    [hexes, liveRegion.latitudeDelta, mapSize.height]
+    [hexes, liveRegion.latitudeDelta, mapSize.height, showCommunityLayer]
   );
 
   // ── Spot CRUD ───────────────────────────────────────────────────────────────
@@ -542,10 +671,42 @@ export default function BiteMapScreen() {
   const setLayers = useCallback((own: boolean, community: boolean) => {
     setShowOwnLayer(own);
     setShowCommunityLayer(community);
+    if (!community) setSelectedCell(null);
     void AsyncStorage.setItem(LAYERS_PREF_KEY, JSON.stringify({ own, community }));
   }, []);
 
   const hasActiveFilters = speciesFilter !== "" || eventTypeFilter.length > 0;
+
+  const clearFilters = useCallback(() => {
+    setSpeciesFilter("");
+    setEventTypeFilter([]);
+    void AsyncStorage.multiSet([
+      [SPECIES_PREF_KEY, ""],
+      [EVENT_TYPES_PREF_KEY, JSON.stringify([])]
+    ]);
+  }, []);
+
+  /*
+   * What the empty card says, most specific reason first. It used to say "no
+   * shared activity here yet" for every cause, including a failed request and
+   * a species filter left on from last week — and filters are sticky, so an
+   * angler had no way to tell that the empty map was their own setting.
+   */
+  const emptyReason: "failed" | "filtered" | "own" | "none" | null =
+    loading || !showCommunityLayer || visibleActivity > 0
+      ? null
+      : communityFailed
+        ? "failed"
+        : hasActiveFilters
+          ? "filtered"
+          : ownEvents.length > 0
+            ? "own"
+            : "none";
+
+  const staleNote =
+    communityFailed && updatedAt && visibleActivity > 0
+      ? t("bitemap.staleData", { time: formatUpdatedAt(updatedAt, locale) })
+      : null;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -767,7 +928,15 @@ export default function BiteMapScreen() {
                 // Hotspots are community data, so they follow the community
                 // switch (they used to stay visible with it off).
                 opacity={showCells ? 1 : 0}
-                tracksViewChanges={false}
+                tracksViewChanges={trackHotspots}
+                onPress={() => {
+                  // The badge sits on top of its cell, so it must answer taps
+                  // for it — otherwise the busiest cells were the hardest to open.
+                  if (!showCells) return;
+                  setSelectedSpot(null);
+                  setSpotForm(null);
+                  setSelectedCell(hex.h3_cell);
+                }}
               >
                 <View style={[styles.hotspotCircle, { borderColor: ringColor }]}>
                   <Text style={styles.hotspotCount}>{hex.total}</Text>
@@ -782,7 +951,20 @@ export default function BiteMapScreen() {
           <View style={styles.crosshairH} />
           <View style={styles.crosshairV} />
         </View>
+        {/* Community cells are being fetched. Small and out of the way: the
+            cached cells underneath are still the right thing to look at. */}
+        {fetching && showCommunityLayer ? (
+          <View style={styles.fetchBadge} pointerEvents="none">
+            <ActivityIndicator size="small" color={Colors.textMuted} />
+          </View>
+        ) : null}
       </View>
+      {staleNote ? (
+        <View style={styles.staleRow}>
+          <Ionicons name="cloud-offline-outline" size={14} color={Colors.textMuted} />
+          <Text style={styles.staleText}>{staleNote}</Text>
+        </View>
+      ) : null}
 
       {/* Save-spot-here action — pins the current map centre */}
       <Pressable
@@ -910,12 +1092,31 @@ export default function BiteMapScreen() {
         </View>
       ) : null}
 
-      {!loading && (totalActivity === 0 || visibleActivity === 0) ? (
+      {emptyReason ? (
         <GlassCard style={styles.emptyCard}>
-          <Ionicons name="fish-outline" size={28} color={Colors.textMuted} />
+          <Ionicons
+            name={emptyReason === "failed" ? "cloud-offline-outline" : "fish-outline"}
+            size={28}
+            color={Colors.textMuted}
+          />
           <Text style={styles.emptyText}>
-            {ownEvents.length > 0 ? t("bitemap.emptyWithOwn") : t("bitemap.empty")}
+            {emptyReason === "failed"
+              ? t("bitemap.loadFailed")
+              : emptyReason === "filtered"
+                ? t("bitemap.emptyFiltered")
+                : emptyReason === "own"
+                  ? t("bitemap.emptyWithOwn")
+                  : t("bitemap.empty")}
           </Text>
+          {emptyReason === "filtered" ? (
+            <Pressable style={styles.emptyActionBtn} onPress={clearFilters}>
+              <Text style={styles.emptyActionText}>{t("bitemap.clearFilters")}</Text>
+            </Pressable>
+          ) : emptyReason === "failed" ? (
+            <Pressable style={styles.emptyActionBtn} onPress={() => void onRefresh()}>
+              <Text style={styles.emptyActionText}>{t("bitemap.retry")}</Text>
+            </Pressable>
+          ) : null}
         </GlassCard>
       ) : null}
 
@@ -1037,13 +1238,22 @@ export default function BiteMapScreen() {
                 keyboardType="numbers-and-punctuation"
               />
             </View>
+            {customError ? (
+              <Text style={styles.customErrorText}>{t("bitemap.customRangeInvalid")}</Text>
+            ) : null}
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.modalApplyBtn}
                 onPress={() => {
                   const from = parseDMY(customFrom);
                   const to = parseDMY(customTo);
-                  if (!from || !to || from > to) return;
+                  // This used to return silently, so a typo looked like a
+                  // broken button.
+                  if (!from || !to || from > to) {
+                    setCustomError(true);
+                    return;
+                  }
+                  setCustomError(false);
                   const toEnd = new Date(to.getTime() + 86400000);
                   const sinceStr = from.toISOString();
                   const untilStr = toEnd.toISOString();
@@ -1052,14 +1262,18 @@ export default function BiteMapScreen() {
                   setTimeMode("custom");
                   setCustomOpen(false);
                   setSelectedCell(null);
-                  setLoading(true);
-                  load("custom", sinceStr, untilStr, speciesFilter, eventTypeFilter)
-                    .finally(() => setLoading(false));
+                  // The focus loader picks the new range up from state.
                 }}
               >
                 <Text style={styles.modalApplyText}>{t("bitemap.customRangeApply")}</Text>
               </Pressable>
-              <Pressable hitSlop={8} onPress={() => setCustomOpen(false)}>
+              <Pressable
+                hitSlop={8}
+                onPress={() => {
+                  setCustomOpen(false);
+                  setCustomError(false);
+                }}
+              >
                 <Text style={styles.modalCancelText}>{t("common.cancel")}</Text>
               </Pressable>
             </View>
@@ -1482,6 +1696,47 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyMedium,
     textAlign: "center"
   },
+  emptyActionBtn: {
+    marginTop: 4,
+    height: 40,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.amber
+  },
+  emptyActionText: {
+    color: Colors.textOnAmber,
+    fontFamily: Fonts.bodyBold,
+    fontSize: 14,
+    letterSpacing: 0
+  },
+  fetchBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border
+  },
+  staleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingTop: 8
+  },
+  staleText: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    letterSpacing: 0
+  },
   // ── Hotspot numbered markers ──
   ownLayerKeyBlock: {
     alignItems: "center",
@@ -1630,6 +1885,12 @@ const styles = StyleSheet.create({
     color: Colors.textOnAmber,
     fontFamily: Fonts.bodyBold,
     fontSize: 15,
+    letterSpacing: 0,
+  },
+  customErrorText: {
+    color: Colors.danger,
+    fontFamily: Fonts.body,
+    fontSize: 13,
     letterSpacing: 0,
   },
   modalCancelText: {

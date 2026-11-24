@@ -14,6 +14,8 @@ import type { Coordinate, Trip } from "@/store/useStrikeStore";
 import { formatDistance, formatDuration } from "@/store/useStrikeStore";
 import { Colors } from "@/theme/colors";
 import { resolvePhotoUri } from "@/services/photoStorage";
+import { windLabel } from "@/services/weather";
+import { speciesLabel } from "@/constants/species";
 import { Fonts } from "@/theme/fonts";
 
 // Instagram Story ratio: 9:16. At 3× device scale this captures at 1080×1920px.
@@ -27,8 +29,14 @@ type Props = {
   catchesLabel: string;
   showRoute?: boolean;
   showStats?: boolean;
-  showLocation?: boolean;
+  /**
+   * Town or area the trip started in, e.g. "Høruphav". Shown only when the
+   * angler turns it on, and never more precise than a place name.
+   */
+  locationLabel?: string;
   photoUri?: string;
+  /** Called once the hero photo has drawn, so capture can wait for it. */
+  onPhotoLoaded?: () => void;
   /** Angler's display name, shown as a byline. Omitted when not shared. */
   profileName?: string;
   /** Angler's profile picture, shown next to the name. */
@@ -188,8 +196,8 @@ function RoutePreview({ route, width, height }: { route: Coordinate[]; width: nu
 }
 
 export const ShareCard = React.forwardRef<View, Props>(
-  ({ trip, weather, contactsLabel, catchesLabel, showRoute = true, showStats = true, showLocation = false, photoUri, profileName, profilePhotoUri }, ref) => {
-    const { t } = useTranslation();
+  ({ trip, weather, contactsLabel, catchesLabel, showRoute = true, showStats = true, locationLabel, photoUri, onPhotoLoaded, profileName, profilePhotoUri }, ref) => {
+    const { t, locale } = useTranslation();
     const catches = trip.events.filter((e) => e.type === "catch");
     const contacts = trip.events.filter((e) => e.type === "contact").length;
 
@@ -198,32 +206,41 @@ export const ShareCard = React.forwardRef<View, Props>(
       .filter((e) => e.lengthCm != null)
       .sort((a, b) => (b.lengthCm ?? 0) - (a.lengthCm ?? 0))[0];
 
+    // Biggest measured fish first, then the number of fish, then contacts. A
+    // trip with two unmeasured catches used to headline as "3 CONTACTS",
+    // hiding the fish — the one thing an angler shares a card to show off.
     const headlineNumber = biggestCatch?.lengthCm != null
       ? `${biggestCatch.lengthCm}`
-      : `${contacts}`;
+      : catches.length > 0
+        ? `${catches.length}`
+        : `${contacts}`;
     const headlineUnit = biggestCatch?.lengthCm != null
       ? "cm"
-      : contactsLabel;
-    const headlineSub = biggestCatch?.species
-      ? biggestCatch.species.toUpperCase()
-      : null;
+      : catches.length > 0
+        ? catchesLabel
+        : contactsLabel;
+    // The stored key is "havoerred"; the card printed it as "HAVOERRED".
+    const headlineSpecies = (biggestCatch ?? catches[0])?.species;
+    const headlineSub = headlineSpecies ? speciesLabel(headlineSpecies, t).toUpperCase() || null : null;
 
     // Conditions string: distance · catches · water temp · wind
     const parts: string[] = [];
     const dist = formatDistance(trip.distanceMeters);
     parts.push(dist);
-    if (catches.length > 0) {
+    if (catches.length > 0 && headlineUnit !== catchesLabel) {
       parts.push(`${catches.length} ${catchesLabel}`);
     }
     if (weather?.waterTemp != null) {
       parts.push(t("weather.water", { v: Math.round(weather.waterTemp) }));
     }
-    if (weather?.windSpeed != null && weather?.windDirection) {
-      parts.push(`${weather.windDirection} ${Math.round(weather.windSpeed)} m/s`);
+    // Stored as degrees ("247"), so it printed as "247 6 m/s".
+    const wind = windLabel(weather?.windDirection);
+    if (weather?.windSpeed != null && wind) {
+      parts.push(`${wind} ${Math.round(weather.windSpeed)} m/s`);
     }
     const conditionsStr = parts.join(" · ");
 
-    const dateStr = new Date(trip.startedAt).toLocaleDateString([], {
+    const dateStr = new Date(trip.startedAt).toLocaleDateString(locale, {
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -241,7 +258,12 @@ export const ShareCard = React.forwardRef<View, Props>(
         {/* Hero: photo → route → dark placeholder */}
         <View style={card.mapWrap}>
           {photoUri ? (
-            <Image source={{ uri: resolvePhotoUri(photoUri) }} style={card.heroPhoto} resizeMode="cover" />
+            <Image
+              source={{ uri: resolvePhotoUri(photoUri) }}
+              style={card.heroPhoto}
+              resizeMode="cover"
+              onLoadEnd={onPhotoLoaded}
+            />
           ) : showRoute ? (
             <RoutePreview route={trip.route} width={CARD_WIDTH} height={220} />
           ) : (
@@ -279,9 +301,11 @@ export const ShareCard = React.forwardRef<View, Props>(
         ) : null}
 
         {/* Location badge */}
-        {showLocation ? (
+        {/* Used to print the English words "Location shared" and no location
+            at all. Now it is the place name, or nothing. */}
+        {locationLabel ? (
           <View style={card.locationBadge}>
-            <Text style={card.locationText}>📍 Location shared</Text>
+            <Text style={card.locationText}>📍 {locationLabel}</Text>
           </View>
         ) : null}
 

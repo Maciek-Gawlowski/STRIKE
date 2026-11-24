@@ -113,7 +113,7 @@ function TripMapInner({
   showProtectionZones = false,
   protectionZoneLabels,
 }: TripMapProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [displayCount, setDisplayCount] = useState<number | null>(null);
   useEffect(() => {
     if (replayTick === undefined) return;
@@ -169,7 +169,7 @@ function TripMapInner({
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}
             title={event.type === "following" ? "Following" : event.type}
-            description={new Date(event.timestamp).toLocaleTimeString([], {
+            description={new Date(event.timestamp).toLocaleTimeString(locale, {
               hour: "2-digit",
               minute: "2-digit"
             })}

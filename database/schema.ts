@@ -151,6 +151,20 @@ export const CREATE_BITE_MAP_DELETE_QUEUE_TABLE = `
   );
 `;
 
+/**
+ * Observations that could not reach the Activity Map when they were logged —
+ * usually because the angler was on a coast with no signal. Retried on app
+ * start and whenever the app comes back to the foreground. Holds ids only;
+ * the row itself is read from events at retry time, so an observation edited
+ * or deleted in the meantime is sent as it is now, or not at all.
+ */
+export const CREATE_BITE_MAP_UPLOAD_QUEUE_TABLE = `
+  CREATE TABLE IF NOT EXISTS bite_map_upload_queue (
+    local_event_id TEXT PRIMARY KEY NOT NULL,
+    queued_at      TEXT NOT NULL
+  );
+`;
+
 export const CREATE_FEEDBACK_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS feedback_queue (
     id            TEXT PRIMARY KEY NOT NULL,
@@ -196,6 +210,7 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     ${CREATE_PROFILE_TABLE}
     ${CREATE_SPOTS_TABLE}
     ${CREATE_BITE_MAP_DELETE_QUEUE_TABLE}
+    ${CREATE_BITE_MAP_UPLOAD_QUEUE_TABLE}
     ${CREATE_FEEDBACK_QUEUE_TABLE}
     ${CREATE_INDEXES}
   `);

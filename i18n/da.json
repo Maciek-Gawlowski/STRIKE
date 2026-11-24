@@ -411,7 +411,14 @@
     "syncUnconfigured": "Denne version har ingen serverforbindelse. Intet deles, og Aktivitetskortet forbliver tomt.",
     "syncUnknown": "Intet sendt endnu. Registrér en fangst eller et hug, så opdateres dette.",
     "syncReadOnly": "Serveren svarer, men der er endnu ikke sendt noget fra denne telefon.",
-    "build": "Build"
+    "build": "Build",
+    "exportExplain": "Tag en kopi af dine ture og observationer. Intet sendes nogen steder hen — du bestemmer selv, hvor filen ender. Billeder bliver på telefonen.",
+    "exportCsv": "Eksportér som regneark (CSV)",
+    "exportJson": "Eksportér fuld backup (JSON)",
+    "exportDialogTitle": "Eksportér STRIKE-data",
+    "exportFailedTitle": "Eksport mislykkedes",
+    "exportFailedBody": "Filen kunne ikke oprettes. Prøv igen, og send os feedback, hvis det bliver ved.",
+    "exportUnavailable": "Deling er ikke tilgængelig på denne enhed."
   },
   "onboarding": {
     "skip": "Spring over",
@@ -455,8 +462,8 @@
     "title": "Del tur",
     "togglePhotos": "Inkluder foto",
     "toggleRoute": "Inkluder rutekort",
-    "toggleLocation": "Inkluder præcis position",
-    "toggleLocationHint": "Fra som standard — holder dit spot privat",
+    "toggleLocation": "Vis bynavn",
+    "toggleLocationHint": "Kun byen, aldrig stedet",
     "toggleStats": "Inkluder statistik",
     "shareBtn": "Del til...",
     "preparing": "Forbereder...",
@@ -531,6 +538,12 @@
     "filterEventType": "Aktivitetstype",
     "filterMapType": "Korttype",
     "emptyWithOwn": "Ingen fælles aktivitet her endnu — de gule mærker er dine egne fangster. Et felt dukker op, når flere fiskere har meldt fra det.",
+    "loadFailed": "Kunne ikke hente det fælles kort lige nu. Træk ned for at prøve igen.",
+    "emptyFiltered": "Intet matcher dine filtre i denne periode. Filtrene huskes mellem besøg.",
+    "clearFilters": "Nulstil filtre",
+    "retry": "Prøv igen",
+    "staleData": "Offline — viser kortet fra {{time}}",
+    "customRangeInvalid": "Brug DD/MM/ÅÅÅÅ, og startdatoen skal ligge før slutdatoen.",
     "ownLayer": "Dine registreringer",
     "layerOwn": "Mine fangster",
     "layerCommunity": "Fællesskabet",
@@ -559,5 +572,20 @@
     "waningGibbous": "Aftagende halvmåne",
     "lastQuarter": "Sidste kvarter",
     "waningCrescent": "Aftagende måne"
+  },
+  "zones": {
+    "closed": "Fredningsbælte",
+    "openToday": "Fredningsbælte — ikke aktivt i dag",
+    "period": "Periode",
+    "law": "Lovgrundlag",
+    "readRule": "Se reglen",
+    "close": "Luk",
+    "understood": "Forstået",
+    "insideTitle": "Fredningsbælte: {{name}}",
+    "insideBody": "Din position er inde i et fredningsbælte, der er lukket i dag. Tjek reglen, før du fisker her.",
+    "alsoIn": "Også inde i: {{names}}",
+    "bannerInside": "I fredningsbælte: {{name}}",
+    "bannerNear": "{{distance}} m fra fredningsbælte: {{name}}",
+    "bannerTap": "Tryk for periode og regel"
   }
 }
