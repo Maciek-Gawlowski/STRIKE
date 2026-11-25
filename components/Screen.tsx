@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactElement } from "react";
+import { PropsWithChildren, ReactElement, ReactNode } from "react";
 import { RefreshControlProps, ScrollView, StyleSheet, View, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "@/theme/colors";
@@ -6,9 +6,11 @@ import { Colors } from "@/theme/colors";
 type ScreenProps = PropsWithChildren<{
   contentStyle?: ViewStyle;
   refreshControl?: ReactElement<RefreshControlProps>;
+  /** Rendered above the scrolling content and not scrolled with it (toasts). */
+  overlay?: ReactNode;
 }>;
 
-export function Screen({ children, contentStyle, refreshControl }: ScreenProps) {
+export function Screen({ children, contentStyle, refreshControl, overlay }: ScreenProps) {
   return (
     <View style={styles.fill}>
       <SafeAreaView style={styles.fill}>
@@ -16,9 +18,18 @@ export function Screen({ children, contentStyle, refreshControl }: ScreenProps) 
           contentContainerStyle={[styles.content, contentStyle]}
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
+          // A tap on a button while the keyboard is up used to only close the
+          // keyboard, so every "Save" under a text field needed two taps.
+          keyboardShouldPersistTaps="handled"
+          // Dragging the page down takes the keyboard with it, as in Mail.
+          keyboardDismissMode="interactive"
+          // Scrolls a focused field clear of the keyboard instead of leaving
+          // the comment box on the catch screen hidden behind it.
+          automaticallyAdjustKeyboardInsets
         >
           {children}
         </ScrollView>
+        {overlay}
       </SafeAreaView>
     </View>
   );

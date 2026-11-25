@@ -9,6 +9,8 @@
     "icon": "./assets/LOGO.1024x1024.png",
     "backgroundColor": "#0D1B2A",
     "splash": {
+      "image": "./assets/strike-logo.png",
+      "resizeMode": "contain",
       "backgroundColor": "#0D1B2A"
     },
     "ios": {
@@ -32,6 +34,15 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/strike-logo.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#0D1B2A"
+        }
+      ],
       "expo-location",
       "expo-image-picker",
       "expo-asset",

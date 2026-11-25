@@ -27,6 +27,7 @@ import { windLabel } from "@/services/weather";
 import { fultonK, moonPhase, skyFromWeatherCode } from "@/services/conditions";
 import { useStrikeStore, type StrikeEvent } from "@/store/useStrikeStore";
 import type { WaterLevelTrend } from "@/services/dmi";
+import { formatDecimal, formatFixed } from "@/services/format";
 import { useTranslation } from "@/i18n";
 import { ALL_SPECIES, speciesLabel } from "@/constants/species";
 import { Colors } from "@/theme/colors";
@@ -169,13 +170,16 @@ export default function EventDetailScreen() {
       isFinClipped: event.isFinClipped ?? false,
       comment: event.comment ?? "",
       kept: event.kept ?? false,
-      lengthCm: event.lengthCm != null ? String(event.lengthCm) : "",
-      weightKg: event.weightKg != null ? String(event.weightKg) : "",
+      // Shown the way the angler types them (comma in Danish); parseNum reads
+      // both. Full precision, so saving without touching a field cannot round
+      // it and trigger a needless map resync.
+      lengthCm: event.lengthCm != null ? formatDecimal(event.lengthCm, 6, locale) : "",
+      weightKg: event.weightKg != null ? formatDecimal(event.weightKg, 6, locale) : "",
       lureId: event.lureId ?? null,
       photoUri: event.photoUri,
-      airTemp: weather?.airTemp != null ? String(weather.airTemp) : "",
-      waterTemp: weather?.waterTemp != null ? String(weather.waterTemp) : "",
-      windSpeed: weather?.windSpeed != null ? String(weather.windSpeed) : "",
+      airTemp: weather?.airTemp != null ? formatDecimal(weather.airTemp, 6, locale) : "",
+      waterTemp: weather?.waterTemp != null ? formatDecimal(weather.waterTemp, 6, locale) : "",
+      windSpeed: weather?.windSpeed != null ? formatDecimal(weather.windSpeed, 6, locale) : "",
       windDirection: weather?.windDirection ?? "",
       pressure: weather?.pressure != null ? String(weather.pressure) : "",
     });
@@ -627,13 +631,13 @@ export default function EventDetailScreen() {
             <View style={styles.bigStats}>
               {event.lengthCm != null ? (
                 <GlassCard style={styles.bigStatCard}>
-                  <Text style={styles.bigStatValue}>{event.lengthCm} cm</Text>
+                  <Text style={styles.bigStatValue}>{formatDecimal(event.lengthCm, 1, locale)} cm</Text>
                   <Text style={styles.bigStatLabel}>{t("catchDetail.length")}</Text>
                 </GlassCard>
               ) : null}
               {event.weightKg != null ? (
                 <GlassCard style={styles.bigStatCard}>
-                  <Text style={styles.bigStatValue}>{event.weightKg} kg</Text>
+                  <Text style={styles.bigStatValue}>{formatDecimal(event.weightKg, 2, locale)} kg</Text>
                   <Text style={styles.bigStatLabel}>{t("catchDetail.weight")}</Text>
                 </GlassCard>
               ) : null}
@@ -695,7 +699,7 @@ export default function EventDetailScreen() {
               <DetailRow
                 icon="navigate-outline"
                 label={t("catchDetail.wind")}
-                value={`${windLabel(weather.windDirection) ?? "–"} ${Math.round(weather.windSpeed)} m/s`}
+                value={`${windLabel(weather.windDirection, locale) ?? "–"} ${Math.round(weather.windSpeed)} m/s`}
               />
             ) : null}
             {weather?.pressure != null ? (
@@ -734,15 +738,16 @@ export default function EventDetailScreen() {
                 icon="swap-horizontal-outline"
                 label={t("catchDetail.current")}
                 value={`${windLabel(
-                  weather.currentDirection != null ? String(weather.currentDirection) : null
-                ) ?? "–"} ${weather.currentVelocity.toFixed(1)} km/t`}
+                  weather.currentDirection != null ? String(weather.currentDirection) : null,
+                  locale
+                ) ?? "–"} ${formatFixed(weather.currentVelocity, 1, locale)} km/t`}
               />
             ) : null}
             {condition != null ? (
               <DetailRow
                 icon="fitness-outline"
                 label={t("catchDetail.condition")}
-                value={`K ${condition.toFixed(2)}`}
+                value={`K ${formatFixed(condition, 2, locale)}`}
               />
             ) : null}
             {lure ? (
@@ -928,7 +933,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: "rgba(242,243,239,0.65)",
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 1.5,
     textTransform: "uppercase"
@@ -981,7 +986,7 @@ const styles = StyleSheet.create({
   },
   bigStatLabel: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 1,
     textTransform: "uppercase",
@@ -1037,7 +1042,7 @@ const styles = StyleSheet.create({
   editLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
@@ -1160,7 +1165,7 @@ speciesGrid: {
   weatherSectionLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginTop: 8,
@@ -1263,7 +1268,7 @@ speciesGrid: {
   attachCatchLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 2,

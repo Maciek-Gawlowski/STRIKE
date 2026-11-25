@@ -8,7 +8,8 @@
     "cancel": "Annuller",
     "gpsPending": "Afventer GPS",
     "seeDetails": "Se detaljer",
-    "seeAll": "Se alle"
+    "seeAll": "Se alle",
+    "loading": "Indlæser"
   },
   "tabs": {
     "home": "Start",
@@ -470,7 +471,9 @@
     "errorCapture": "Kunne ikke oprette delingskort",
     "togglePhotosNoneHint": "Denne tur har ingen billeder",
     "toggleProfile": "Inkluder navn og profilbillede",
-    "toggleProfileNoneHint": "Du har hverken navn eller billede i din profil"
+    "toggleProfileNoneHint": "Du har hverken navn eller billede i din profil",
+    "durationHm": "{{h}} t {{m}} min",
+    "durationM": "{{m}} min"
   },
   "eventEdit": {
     "editBtn": "Rediger",
@@ -587,5 +590,19 @@
     "bannerInside": "I fredningsbælte: {{name}}",
     "bannerNear": "{{distance}} m fra fredningsbælte: {{name}}",
     "bannerTap": "Tryk for periode og regel"
+  },
+  "undo": {
+    "logged": "{{what}} registreret",
+    "action": "Fortryd",
+    "a11y": "Fortryd {{what}}",
+    "catchMistake": "Tastet ved en fejl — fortryd fangst"
+  },
+  "a11y": {
+    "edit": "Rediger",
+    "delete": "Slet",
+    "favourite": "Favorit",
+    "unfavourite": "Fjern fra favoritter",
+    "share": "Del tur",
+    "removeEvent": "Fjern hændelse"
   }
 }

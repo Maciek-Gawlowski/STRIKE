@@ -92,7 +92,7 @@ function ColourPicker({
 
 const pickerStyles = StyleSheet.create({
   root: { gap: 6 },
-  label: { color: Colors.textMuted, fontSize: 11, fontFamily: Fonts.bodySemibold, letterSpacing: 0, textTransform: "uppercase" },
+  label: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.bodySemibold, letterSpacing: 0, textTransform: "uppercase" },
   strip: { flexDirection: "row", gap: 10, paddingVertical: 2 },
   dot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
   dotSelected: { borderWidth: 2.5, borderColor: Colors.textBright },
@@ -440,7 +440,7 @@ export default function ProfileScreen() {
             <View key={item.id} style={styles.lureRow}>
               <Ionicons name="construct-outline" size={16} color={Colors.textMuted} />
               <Text style={styles.lureName}>{item.name}</Text>
-              <Pressable hitSlop={8} onPress={() => removeGear(item.id)}>
+              <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel={t("a11y.delete")} onPress={() => removeGear(item.id)}>
                 <Ionicons name="trash-outline" size={16} color={Colors.textMuted} />
               </Pressable>
             </View>
@@ -483,7 +483,7 @@ export default function ProfileScreen() {
                     <Pressable hitSlop={8} onPress={cancelEdit}>
                       <Text style={styles.editCancelText}>{t("common.cancel")}</Text>
                     </Pressable>
-                    <Pressable hitSlop={8} onPress={() => void removeLure(lure.id)}>
+                    <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel={t("a11y.delete")} onPress={() => void removeLure(lure.id)}>
                       <Ionicons name="trash-outline" size={18} color={Colors.danger} />
                     </Pressable>
                   </View>
@@ -492,7 +492,12 @@ export default function ProfileScreen() {
             }
             return (
               <Pressable key={lure.id} style={styles.lureRow} onPress={() => openEdit(lure)}>
-                <Pressable hitSlop={8} onPress={() => void toggleFavourite(lure.id)}>
+                <Pressable
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(lure.isFavourite ? "a11y.unfavourite" : "a11y.favourite")}
+                  onPress={() => void toggleFavourite(lure.id)}
+                >
                   <Ionicons name={lure.isFavourite ? "star" : "star-outline"} size={20} color={lure.isFavourite ? Colors.amber : Colors.textMuted} />
                 </Pressable>
                 <LureColourDot colourKey={lure.colour} colourSecondaryKey={lure.colourSecondary} size={14} />
@@ -525,7 +530,7 @@ export default function ProfileScreen() {
                 <Text style={styles.spotRowName}>{spot.name}</Text>
                 {spot.note ? <Text style={styles.spotRowNote} numberOfLines={1}>{spot.note}</Text> : null}
               </View>
-              <Pressable hitSlop={10} onPress={() => void removeSpot(spot.id)}>
+              <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={t("a11y.delete")} onPress={() => void removeSpot(spot.id)}>
                 <Ionicons name="trash-outline" size={17} color={Colors.textMuted} />
               </Pressable>
             </Pressable>
@@ -720,7 +725,7 @@ const styles = StyleSheet.create({
   syncRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   syncDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.textMuted },
   syncLabel: { flex: 1, color: Colors.text, fontFamily: Fonts.bodySemibold, fontSize: 13, letterSpacing: 0 },
-  syncDetail: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 11, lineHeight: 16, marginTop: 8 },
+  syncDetail: { color: Colors.textMuted, fontFamily: Fonts.body, fontSize: 12, lineHeight: 17, marginTop: 8 },
   dataDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   panel: { borderRadius: 16, padding: 16, gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
 

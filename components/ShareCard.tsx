@@ -11,7 +11,7 @@ import Svg, {
 import type { WeatherSnapshot } from "@/database/queries";
 import { useTranslation } from "@/i18n";
 import type { Coordinate, Trip } from "@/store/useStrikeStore";
-import { formatDistance, formatDuration } from "@/store/useStrikeStore";
+import { formatDistance } from "@/store/useStrikeStore";
 import { Colors } from "@/theme/colors";
 import { resolvePhotoUri } from "@/services/photoStorage";
 import { windLabel } from "@/services/weather";
@@ -223,10 +223,11 @@ export const ShareCard = React.forwardRef<View, Props>(
     const headlineSpecies = (biggestCatch ?? catches[0])?.species;
     const headlineSub = headlineSpecies ? speciesLabel(headlineSpecies, t).toUpperCase() || null : null;
 
-    // Conditions string: distance · catches · water temp · wind
+    // Conditions line: catches · water temp · wind. Distance used to open
+    // this line as well, printing it twice — it already sits next to the
+    // duration on the line above.
     const parts: string[] = [];
-    const dist = formatDistance(trip.distanceMeters);
-    parts.push(dist);
+    const dist = formatDistance(trip.distanceMeters, locale);
     if (catches.length > 0 && headlineUnit !== catchesLabel) {
       parts.push(`${catches.length} ${catchesLabel}`);
     }
@@ -234,7 +235,7 @@ export const ShareCard = React.forwardRef<View, Props>(
       parts.push(t("weather.water", { v: Math.round(weather.waterTemp) }));
     }
     // Stored as degrees ("247"), so it printed as "247 6 m/s".
-    const wind = windLabel(weather?.windDirection);
+    const wind = windLabel(weather?.windDirection, locale);
     if (weather?.windSpeed != null && wind) {
       parts.push(`${wind} ${Math.round(weather.windSpeed)} m/s`);
     }
@@ -245,7 +246,18 @@ export const ShareCard = React.forwardRef<View, Props>(
       month: "short",
       year: "numeric",
     });
-    const durationStr = formatDuration(trip.startedAt, trip.endedAt);
+    // formatDuration prints "05:26" for a short trip — fine on a live timer,
+    // but on a card it reads as a time of day. Spell it out instead.
+    const elapsedMin = Math.max(
+      1,
+      Math.round(
+        (new Date(trip.endedAt ?? Date.now()).getTime() - new Date(trip.startedAt).getTime()) / 60000
+      )
+    );
+    const durationStr =
+      elapsedMin >= 60
+        ? t("share.durationHm", { h: Math.floor(elapsedMin / 60), m: elapsedMin % 60 })
+        : t("share.durationM", { m: elapsedMin });
 
     return (
       <View ref={ref} style={card.root} collapsable={false}>

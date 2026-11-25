@@ -12,6 +12,7 @@ import { getLures, type Lure } from "@/database/lures";
 import { LureColourDot } from "@/components/LureColourDot";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { formatWind } from "@/services/weather";
+import { parseDecimalInput } from "@/services/format";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
@@ -111,8 +112,8 @@ export default function CatchScreen() {
 
   const saveCatch = async () => {
     if (!activeTrip) return;
-    const parsedLength = parseFloat(lengthCm);
-    const parsedWeight = parseFloat(weightKg);
+    const parsedLength = parseDecimalInput(lengthCm);
+    const parsedWeight = parseDecimalInput(weightKg);
     addCatch({
       photoUri,
       species: selectedSpecies,
@@ -174,7 +175,7 @@ export default function CatchScreen() {
               </View>
               <View style={styles.weatherPill}>
                 <Ionicons name="navigate-outline" size={14} color={Colors.text} />
-                <Text style={styles.weatherPillText}>{formatWind(weather)}</Text>
+                <Text style={styles.weatherPillText}>{formatWind(weather, locale)}</Text>
               </View>
               <View style={styles.weatherPill}>
                 <Ionicons name="trending-down-outline" size={14} color={Colors.text} />

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { formatDistance, formatDuration, useStrikeStore } from "@/store/useStrikeStore";
+import { SkeletonCard } from "@/components/Skeleton";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
@@ -34,6 +35,7 @@ function Metric({
 export default function LogbookScreen() {
   const { t, locale } = useTranslation();
   const trips = useStrikeStore((state) => state.trips);
+  const isHydrated = useStrikeStore((state) => state.isHydrated);
 
   const groupedTrips = useMemo(() => {
     const groups = new Map<string, typeof trips>();
@@ -48,13 +50,19 @@ export default function LogbookScreen() {
       groups.set(key, existing);
     }
     return Array.from(groups.entries());
-  }, [trips]);
+  }, [trips, locale]);
 
   return (
     <Screen>
       <Text style={styles.title}>{t("logbook.title")}</Text>
 
-      {trips.length === 0 ? (
+      {!isHydrated ? (
+        <View style={styles.list}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : trips.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="journal-outline" size={44} color={Colors.textMuted} />
           <Text style={styles.emptyTitle}>{t("logbook.emptyTitle")}</Text>
@@ -100,7 +108,7 @@ export default function LogbookScreen() {
                     </View>
                     <View style={styles.stats}>
                       <Metric icon="time-outline" value={formatDuration(trip.startedAt, trip.endedAt)} />
-                      <Metric icon="footsteps-outline" value={formatDistance(trip.distanceMeters)} />
+                      <Metric icon="footsteps-outline" value={formatDistance(trip.distanceMeters, locale)} />
                       <Metric icon="fish-outline" value={String(catches)} highlight={catches > 0} />
                       <Metric icon="flash-outline" value={String(contacts)} />
                     </View>

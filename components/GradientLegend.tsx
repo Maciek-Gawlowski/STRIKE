@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Fonts.bodySemibold,
     textAlign: "center"
   }

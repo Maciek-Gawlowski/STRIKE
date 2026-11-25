@@ -115,7 +115,9 @@ export function ProtectionZoneLayer({ date, labels }: Props) {
       });
     }
 
-    console.log(`[strike/zones] ${zones.length} zones, ${out.length} polygons mounted once`);
+    if (__DEV__) {
+      console.log(`[strike/zones] ${zones.length} zones, ${out.length} polygons mounted once`);
+    }
     return out;
   }, []);
 

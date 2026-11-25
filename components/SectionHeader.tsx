@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 0.8,
     textTransform: "uppercase"

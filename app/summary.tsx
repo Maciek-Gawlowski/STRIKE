@@ -129,7 +129,7 @@ export default function SummaryScreen() {
       conditionChips.push({ icon: "water-outline", label: t("weather.water", { v: Math.round(tripWeather.waterTemp) }) });
     }
     if (tripWeather.windSpeed != null) {
-      const dir = windLabel(tripWeather.windDirection) ?? "";
+      const dir = windLabel(tripWeather.windDirection, locale) ?? "";
       conditionChips.push({ icon: "navigate-outline", label: `${dir} ${Math.round(tripWeather.windSpeed)} m/s`.trim() });
     }
   }
@@ -161,7 +161,7 @@ export default function SummaryScreen() {
       {/* Big stats 2×2 */}
       <View style={styles.statsGrid}>
         <StatBlock value={formatDuration(trip.startedAt, trip.endedAt)} label={t("metrics.duration")} />
-        <StatBlock value={formatDistance(trip.distanceMeters)} label={t("metrics.distance")} />
+        <StatBlock value={formatDistance(trip.distanceMeters, locale)} label={t("metrics.distance")} />
         <StatBlock value={String(contacts)} label={t("metrics.contacts")} />
         <StatBlock value={String(catches.length)} label={t("metrics.catches")} />
       </View>
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   statLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   sectionKicker: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },

@@ -11,9 +11,12 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { getStatistics, getBestConditions, getLureStats, type Statistics, type WindDirectionCount, type BestConditions, type LureStat } from "@/services/statistics";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { LureColourDot } from "@/components/LureColourDot";
+import { formatFixed } from "@/services/format";
+import { SkeletonBlock, SkeletonCard } from "@/components/Skeleton";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { speciesLabel } from "@/constants/species";
+import { windLabel } from "@/services/weather";
 import { Fonts } from "@/theme/fonts";
 
 // ── Compass rose — catches by wind direction ──────────────────────────────────
@@ -638,7 +641,14 @@ export default function StatsScreen() {
     return (
       <Screen refreshControl={refreshControl}>
         <Text style={styles.title}>{t("stats.title")}</Text>
-        <Text style={styles.subtle}>{t("stats.loading")}</Text>
+        {/* Shaped like the screen that is coming: three tiles, then cards. */}
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <SkeletonBlock height={84} radius={14} style={{ flex: 1 }} />
+          <SkeletonBlock height={84} radius={14} style={{ flex: 1 }} />
+          <SkeletonBlock height={84} radius={14} style={{ flex: 1 }} />
+        </View>
+        <SkeletonCard lines={3} height={180} />
+        <SkeletonCard lines={2} />
       </Screen>
     );
   }
@@ -708,7 +718,7 @@ export default function StatsScreen() {
               color="#6FA8DC"
               label={t("stats.condWind")}
               value={bestCond.windSpeedAvg != null ? `${bestCond.windSpeedAvg} m/s` : "–"}
-              sub={bestCond.windDirection ?? undefined}
+              sub={windLabel(bestCond.windDirection, locale) ?? undefined}
             />
             <View style={styles.summaryDivider} />
             <CondColumn
@@ -728,30 +738,30 @@ export default function StatsScreen() {
       <SectionHeader title={t("stats.averages")} />
       <View style={styles.avgGrid}>
         <AvgTile
-          value={stats.catchesPerTrip.toFixed(1)}
+          value={formatFixed(stats.catchesPerTrip, 1, locale)}
           label={t("stats.avgTileCatchesPerTrip")}
         />
         <AvgTile
-          value={hoursPerCatch != null ? hoursPerCatch.toFixed(1) : "–"}
+          value={hoursPerCatch != null ? formatFixed(hoursPerCatch, 1, locale) : "–"}
           label={t("stats.avgTileHoursPerCatch")}
         />
         <AvgTile
           value={stats.avgDistanceBetweenContacts != null
-            ? stats.avgDistanceBetweenContacts.toFixed(1)
+            ? formatFixed(stats.avgDistanceBetweenContacts, 1, locale)
             : "–"}
           label={t("stats.avgTileKmPerContact")}
         />
         <AvgTile
           value={stats.avgTimeBetweenContacts != null
-            ? (stats.avgTimeBetweenContacts / 60).toFixed(1)
+            ? formatFixed(stats.avgTimeBetweenContacts / 60, 1, locale)
             : "–"}
           label={t("stats.avgTileHoursPerContact")}
         />
       </View>
       <Text style={styles.totalsMuted}>
         {t("stats.totals", {
-          km: stats.totalDistance.toFixed(1),
-          h: stats.totalHours.toFixed(1),
+          km: formatFixed(stats.totalDistance, 1, locale),
+          h: formatFixed(stats.totalHours, 1, locale),
         })}
       </Text>
 
@@ -795,7 +805,7 @@ export default function StatsScreen() {
               {stats.catchesByWindDirection.slice(0, 4).map((item) => (
                 <View key={item.direction} style={styles.legendRow}>
                   <View style={styles.legendDot} />
-                  <Text style={styles.legendDir}>{item.direction}</Text>
+                  <Text style={styles.legendDir}>{windLabel(item.direction, locale) ?? item.direction}</Text>
                   <Text style={styles.legendCount}>{item.count}</Text>
                 </View>
               ))}
@@ -874,7 +884,7 @@ export default function StatsScreen() {
                   <Text style={styles.recordRowDate}>{formatDate(stats.longestTrip.date, locale)}</Text>
                 </View>
                 <Text style={styles.recordRowValue}>
-                  {stats.longestTrip.distance.toFixed(2)} km / {stats.longestTrip.duration}
+                  {formatFixed(stats.longestTrip.distance, 2, locale)} km / {stats.longestTrip.duration}
                 </Text>
               </View>
             ) : null}
@@ -961,7 +971,7 @@ const styles = StyleSheet.create({
   avgLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 10,
+    fontSize: 12,
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
@@ -1255,7 +1265,7 @@ const styles = StyleSheet.create({
   heroLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 10,
+    fontSize: 12,
     letterSpacing: 0.8,
     textTransform: "uppercase",
     textAlign: "center",
@@ -1284,7 +1294,7 @@ const styles = StyleSheet.create({
   stackLegendLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
 
@@ -1296,7 +1306,7 @@ const styles = StyleSheet.create({
   cardLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
@@ -1320,7 +1330,7 @@ const styles = StyleSheet.create({
   condColumnLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
   condColumnValue: {
@@ -1332,7 +1342,7 @@ const styles = StyleSheet.create({
   condColumnSub: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
 
@@ -1360,7 +1370,7 @@ const styles = StyleSheet.create({
   recordRowDate: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
   },
   recordRowValue: {
     color: Colors.textBright,

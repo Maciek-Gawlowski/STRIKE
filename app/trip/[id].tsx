@@ -5,6 +5,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
 import { TripMap } from "@/components/TripMap";
+import { formatDecimal } from "@/services/format";
 import { useTranslation } from "@/i18n";
 import { formatDistance, formatDuration, useStrikeStore } from "@/store/useStrikeStore";
 import { Colors } from "@/theme/colors";
@@ -109,7 +110,12 @@ export default function TripReviewScreen() {
           <Text style={styles.backText}>{t("common.back")}</Text>
         </Pressable>
         <View style={styles.navRight}>
-          <Pressable style={styles.iconBtn} onPress={() => router.push(`/share?tripId=${trip.id}` as never)}>
+          <Pressable
+            style={styles.iconBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y.share")}
+            onPress={() => router.push(`/share?tripId=${trip.id}` as never)}
+          >
             <Ionicons name="share-outline" size={18} color={Colors.textMuted} />
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={t("trip.deleteBtn")} style={styles.iconBtn} onPress={handleDeleteTrip}>
@@ -164,7 +170,7 @@ export default function TripReviewScreen() {
 
       <View style={styles.metrics}>
         <MetricCard label={t("metrics.duration")} value={formatDuration(trip.startedAt, trip.endedAt)} />
-        <MetricCard label={t("metrics.distance")} value={formatDistance(trip.distanceMeters)} />
+        <MetricCard label={t("metrics.distance")} value={formatDistance(trip.distanceMeters, locale)} />
         <MetricCard label={t("metrics.catches")} value={catches} />
         <MetricCard label={t("metrics.contacts")} value={contacts} />
         <MetricCard label={t("metrics.following")} value={following} />
@@ -194,7 +200,7 @@ export default function TripReviewScreen() {
             hour: "2-digit", minute: "2-digit"
           });
           const catchMeta = event.type === "catch" && event.lengthCm != null
-            ? `${event.lengthCm} cm${event.weightKg != null ? ` · ${event.weightKg} kg` : ""}`
+            ? `${formatDecimal(event.lengthCm, 1, locale)} cm${event.weightKg != null ? ` · ${formatDecimal(event.weightKg, 2, locale)} kg` : ""}`
             : null;
 
           return (
@@ -229,7 +235,12 @@ export default function TripReviewScreen() {
               </Pressable>
 
               {/* Trash */}
-              <Pressable style={styles.removeBtn} onPress={() => handleRemoveEvent(event.id)}>
+              <Pressable
+                    style={styles.removeBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("a11y.removeEvent")}
+                    onPress={() => handleRemoveEvent(event.id)}
+                  >
                 <Ionicons name="trash-outline" size={15} color={Colors.textMuted} />
               </Pressable>
             </View>
@@ -345,7 +356,7 @@ const styles = StyleSheet.create({
   lastTimeText: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
   metrics: {

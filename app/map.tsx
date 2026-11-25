@@ -10,6 +10,8 @@ import { LureColourDot } from "@/components/LureColourDot";
 import { MetricCard } from "@/components/MetricCard";
 import { Screen } from "@/components/Screen";
 import { SpeciesPrompt } from "@/components/SpeciesPrompt";
+import { UndoToast } from "@/components/UndoToast";
+import { useUndo } from "@/store/useUndo";
 import { ZoneBanner } from "@/components/ZoneBanner";
 import { TripMap } from "@/components/TripMap";
 import { formatDistance, formatDuration, useStrikeStore, type StrikeEvent } from "@/store/useStrikeStore";
@@ -29,7 +31,7 @@ const MAP_TYPE_LABEL_KEY: Record<MapType, string> = {
 };
 
 export default function MapScreen() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const activeTrip = useStrikeStore((state) => state.activeTrip);
   const hasGpsFix = useStrikeStore((state) => state.hasGpsFix);
   const currentLocation = useStrikeStore((state) => state.currentLocation);
@@ -56,9 +58,13 @@ export default function MapScreen() {
     getDb().then(getLures).then(setLures).catch(() => null);
   }, []);
 
+  const offerUndo = useUndo((state) => state.offer);
+  const removeActiveEvent = useStrikeStore((state) => state.removeActiveEvent);
+
   const handleEvent = async (type: "contact" | "following") => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addEvent(type);
+    const created = addEvent(type);
+    if (created) offerUndo(created.id, type);
   };
 
   const handleCatch = async () => {
@@ -81,7 +87,11 @@ export default function MapScreen() {
       Animated.delay(320),
       Animated.timing(celebAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
-    if (created) setSpeciesPrompt(created);
+    if (created) {
+      // The species prompt covers the undo strip, so a catch is undone
+      // from inside the prompt instead (onUndo below).
+      setSpeciesPrompt(created);
+    }
   };
 
   /**
@@ -116,10 +126,21 @@ export default function MapScreen() {
     }
   };
 
-  const handleStop = async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    stopTrip();
-    router.replace("/summary");
+  // Same confirmation as the stop button on Home. This one ended the trip on
+  // a single touch, and a trip cannot be restarted once stopped.
+  const handleStop = () => {
+    Alert.alert(t("trip.stopConfirmTitle"), t("trip.stopConfirmBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("trip.stopConfirmBtn"),
+        style: "destructive",
+        onPress: async () => {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          stopTrip();
+          router.replace("/summary");
+        }
+      }
+    ]);
   };
 
   if (!activeTrip) {
@@ -142,7 +163,16 @@ export default function MapScreen() {
   const catches = activeTrip.events.filter((event) => event.type === "catch").length;
 
   return (
-    <Screen contentStyle={styles.content}>
+    <Screen
+      contentStyle={styles.content}
+      overlay={
+        <UndoToast
+          onUndone={(eventId) => {
+            setSpeciesPrompt((current) => (current?.id === eventId ? null : current));
+          }}
+        />
+      }
+    >
       <View style={styles.nav}>
         <Pressable style={styles.back} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color={Colors.text} />
@@ -202,7 +232,7 @@ export default function MapScreen() {
       <View style={styles.metrics}>
         <View style={styles.metricsRow}>
           <MetricCard label={t("metrics.time")} value={formatDuration(activeTrip.startedAt, new Date(now).toISOString())} />
-          <MetricCard label={t("metrics.distance")} value={formatDistance(activeTrip.distanceMeters)} />
+          <MetricCard label={t("metrics.distance")} value={formatDistance(activeTrip.distanceMeters, locale)} />
         </View>
         <View style={styles.metricsRow}>
           <MetricCard label={t("metrics.contacts")} value={contacts} />
@@ -265,6 +295,13 @@ export default function MapScreen() {
         event={speciesPrompt}
         onPick={confirmSpecies}
         onDismiss={() => setSpeciesPrompt(null)}
+        onUndo={() => {
+          const event = speciesPrompt;
+          setSpeciesPrompt(null);
+          if (!event) return;
+          removeActiveEvent(event.id);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        }}
         onMoreDetails={() => {
           const event = speciesPrompt;
           setSpeciesPrompt(null);

@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -1022,10 +1024,10 @@ export default function BiteMapScreen() {
           <View style={styles.spotCardHeader}>
             <Ionicons name="location" size={20} color={Colors.amber} />
             <Text style={styles.spotCardName} numberOfLines={1}>{selectedSpot.name}</Text>
-            <Pressable hitSlop={10} onPress={() => openEditSpot(selectedSpot)}>
+            <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={t("a11y.edit")} onPress={() => openEditSpot(selectedSpot)}>
               <Ionicons name="pencil-outline" size={18} color={Colors.textMuted} />
             </Pressable>
-            <Pressable hitSlop={10} onPress={() => void handleDeleteSpot(selectedSpot.id)}>
+            <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={t("a11y.delete")} onPress={() => void handleDeleteSpot(selectedSpot.id)}>
               <Ionicons name="trash-outline" size={18} color={Colors.danger} />
             </Pressable>
           </View>
@@ -1213,7 +1215,11 @@ export default function BiteMapScreen() {
         animationType="fade"
         onRequestClose={() => setCustomOpen(false)}
       >
-        <View style={styles.modalOverlay}>
+        {/* Lifts the card above the keyboard; on a small iPhone the input sat behind it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>{t("bitemap.customRange")}</Text>
             <View style={styles.modalRow}>
@@ -1278,7 +1284,7 @@ export default function BiteMapScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
     </Screen>
@@ -1346,7 +1352,7 @@ const styles = StyleSheet.create({
   toggleText: {
     color: Colors.text,
     fontFamily: Fonts.bodyBold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.4
   },
   toggleTextActive: {
@@ -1455,7 +1461,7 @@ const styles = StyleSheet.create({
   sheetSectionTitle: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.8,
     textTransform: "uppercase",
     marginBottom: -6,
@@ -1626,7 +1632,7 @@ const styles = StyleSheet.create({
   },
   activityLabel: {
     fontFamily: Fonts.black,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 1.2,
     textTransform: "uppercase"
   },
@@ -1676,7 +1682,7 @@ const styles = StyleSheet.create({
   counterLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase"
   },

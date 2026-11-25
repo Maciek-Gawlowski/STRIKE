@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { formatWind, windLabel } from "@/services/weather";
 import { moonPhase, skyFromWeatherCode } from "@/services/conditions";
+import { formatFixed } from "@/services/format";
 import { useTranslation } from "@/i18n";
 import { Colors } from "@/theme/colors";
 import { Fonts } from "@/theme/fonts";
@@ -42,7 +43,7 @@ function Column({
 }
 
 export function WeatherStrip() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const weather = useStrikeStore((state) => state.weather);
   const waterLevel = useStrikeStore((state) => state.waterLevel);
 
@@ -77,9 +78,10 @@ export function WeatherStrip() {
     weather?.currentVelocity != null
       ? `${t("weather.currentShort")} ${
           windLabel(
-            weather.currentDirection != null ? String(weather.currentDirection) : null
+            weather.currentDirection != null ? String(weather.currentDirection) : null,
+            locale
           ) ?? "–"
-        } ${weather.currentVelocity.toFixed(1)} km/t`
+        } ${formatFixed(weather.currentVelocity, 1, locale)} km/t`
       : null,
     `${t(`moon.${moon.key}` as never)} ${Math.round(moon.illumination * 100)}%`,
     waterLevel?.stationName ?? null
@@ -115,7 +117,7 @@ export function WeatherStrip() {
               color="#7FC8A9"
               label={t("weather.windLabel")}
               value={`${Math.round(weather.windSpeed)}`}
-              sub={formatWind(weather).split(" ")[0]}
+              sub={formatWind(weather, locale).split(" ")[0]}
             />
           </>
         ) : null}
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
   columnLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
   },
   columnValue: {
     color: Colors.textBright,
@@ -164,7 +166,7 @@ const styles = StyleSheet.create({
   columnSub: {
     color: Colors.textMuted,
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
   },
   footnote: {
     color: Colors.textMuted,

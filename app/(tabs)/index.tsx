@@ -5,9 +5,26 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, AppState, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Animated,
+  AppState,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import { ActionButton } from "@/components/ActionButton";
 import { AnimatedCounter } from "@/components/AnimatedCounter";
+import { SkeletonCard } from "@/components/Skeleton";
+import { UndoToast } from "@/components/UndoToast";
+import { useUndo } from "@/store/useUndo";
 import { ZoneBanner } from "@/components/ZoneBanner";
 import { GlassCard } from "@/components/GlassCard";
 import { LureColourDot } from "@/components/LureColourDot";
@@ -195,7 +212,10 @@ export default function HomeScreen() {
 
 
   const recentTrips = trips.slice(0, 3);
-  const isEmpty = trips.length === 0 && !activeTrip;
+  const isHydrated = useStrikeStore((state) => state.isHydrated);
+  // Not "empty" until the database has actually been read — otherwise the
+  // welcome card flashed for every angler with a full logbook on each launch.
+  const isEmpty = isHydrated && trips.length === 0 && !activeTrip;
 
   // Load lures whenever we need them (trip start or active trip)
   useEffect(() => {
@@ -251,11 +271,15 @@ export default function HomeScreen() {
     router.push("/map");
   }, [startTrip, selectedLureId, t]);
 
+  const offerUndo = useUndo((state) => state.offer);
+  const removeActiveEvent = useStrikeStore((state) => state.removeActiveEvent);
+
   const handleEvent = useCallback(async (type: "contact" | "following") => {
     if (!activeTrip) return;
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addEvent(type);
-  }, [activeTrip, addEvent]);
+    const created = addEvent(type);
+    if (created) offerUndo(created.id, type);
+  }, [activeTrip, addEvent, offerUndo]);
 
   const handleCatch = useCallback(async () => {
     if (!activeTrip) return;
@@ -277,7 +301,11 @@ export default function HomeScreen() {
       Animated.delay(320),
       Animated.timing(celebAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
-    if (created) setSpeciesPrompt(created);
+    if (created) {
+      // The species prompt covers the undo strip, so a catch is undone
+      // from inside the prompt instead (onUndo below).
+      setSpeciesPrompt(created);
+    }
   }, [activeTrip, addCatch, currentLocation, celebAnim]);
 
   /**
@@ -382,7 +410,17 @@ export default function HomeScreen() {
   }
 
   return (
-    <Screen contentStyle={styles.content}>
+    <Screen
+      contentStyle={styles.content}
+      overlay={
+        <UndoToast
+          onUndone={(eventId) => {
+            // Undoing a catch also closes the "which species?" question about it.
+            setSpeciesPrompt((current) => (current?.id === eventId ? null : current));
+          }}
+        />
+      }
+    >
       {/* ── Header ── */}
       <View style={styles.headerHero}>
         <View style={styles.header}>
@@ -484,7 +522,9 @@ export default function HomeScreen() {
       )}
 
       {/* ── OVERBLIK / empty state ── */}
-      {isEmpty ? (
+      {!isHydrated && !activeTrip ? (
+        <SkeletonCard lines={3} height={190} />
+      ) : isEmpty ? (
         <StatCard style={styles.welcomeCard}>
           <Text style={styles.welcomeTitle}>{t("home.welcomeTitle")}</Text>
           <Text style={styles.welcomeText}>{t("home.welcomeText")}</Text>
@@ -531,7 +571,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.tripPanelDivider} />
                 <View>
-                  <Text style={styles.tripPanelValue}>{formatDistance(displayTrip.distanceMeters)}</Text>
+                  <Text style={styles.tripPanelValue}>{formatDistance(displayTrip.distanceMeters, locale)}</Text>
                   <Text style={styles.tripPanelLabel}>{t("metrics.distance")}</Text>
                 </View>
               </View>
@@ -541,7 +581,7 @@ export default function HomeScreen() {
                     weather.waterTemp != null
                       ? t("weather.water", { v: Math.round(weather.waterTemp) })
                       : null,
-                    formatWind(weather),
+                    formatWind(weather, locale),
                     waterLevel?.stationName ?? null
                   ]
                     .filter(Boolean)
@@ -643,6 +683,13 @@ export default function HomeScreen() {
         event={speciesPrompt}
         onPick={confirmSpecies}
         onDismiss={() => setSpeciesPrompt(null)}
+        onUndo={() => {
+          const event = speciesPrompt;
+          setSpeciesPrompt(null);
+          if (!event) return;
+          removeActiveEvent(event.id);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        }}
         onMoreDetails={() => {
           const event = speciesPrompt;
           setSpeciesPrompt(null);
@@ -685,7 +732,11 @@ export default function HomeScreen() {
 
       {/* ── Trip name modal ── */}
       <Modal visible={tripNameOpen} transparent animationType="fade" onRequestClose={() => setTripNameOpen(false)}>
-        <View style={styles.modalScrim}>
+        {/* Lifts the card above the keyboard; on a small iPhone the input sat behind it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalScrim}
+        >
           <View style={styles.modalCard}>
             <Text style={styles.modalKicker}>{t("home.modalKicker")}</Text>
             <Text style={styles.modalTitle}>{t("home.modalTitle")}</Text>
@@ -737,7 +788,7 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
     </Screen>
@@ -833,7 +884,7 @@ const styles = StyleSheet.create({
   // should mean action mean nothing at all.
   tagline: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 1.4,
     marginTop: 1
@@ -960,7 +1011,7 @@ const styles = StyleSheet.create({
   tripPanelLabel: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.8,
     textTransform: "uppercase",
     marginTop: 1
@@ -993,7 +1044,7 @@ const styles = StyleSheet.create({
   },
   counterLabel: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Fonts.bodySemibold,
     letterSpacing: 1.5,
     textTransform: "uppercase"
@@ -1184,7 +1235,7 @@ const styles = StyleSheet.create({
   },
   lurePickerLabel: {
     color: Colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Fonts.bodySemibold,
     textTransform: "uppercase",
     letterSpacing: 0
@@ -1252,7 +1303,7 @@ const liveBadge = StyleSheet.create({
   text: {
     color: Colors.textOnAmber,
     fontFamily: Fonts.black,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 1.5
   }
 });

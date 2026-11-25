@@ -73,15 +73,30 @@ export function degreesToCompass(degrees: number): string {
  * and the reverse put a null wind direction on the shared map. Deciding from
  * the value rather than from an assumption is correct for both vintages.
  */
-export function windLabel(stored: string | null | undefined): string | null {
+export function windLabel(stored: string | null | undefined, locale?: string): string | null {
   if (!stored) return null;
   const degrees = Number(stored);
-  return Number.isFinite(degrees) ? degreesToCompass(degrees) : stored;
+  const label = Number.isFinite(degrees) ? degreesToCompass(degrees) : stored;
+  return locale ? compassLabel(label, locale) : label;
+}
+
+/**
+ * A stored compass label ("ENE", always English) as the reader writes it.
+ * Danish uses Ø for east and V for west — DMI writes "SV", and a card that
+ * says "E 2 m/s" reads as foreign to the anglers it is meant for.
+ *
+ * Display only. What is stored and what goes to the shared map stays English,
+ * so data from Danish and English phones still lines up.
+ */
+export function compassLabel(label: string, locale: string): string {
+  if (!locale.startsWith("da")) return label;
+  return label.replace(/E/g, "Ø").replace(/W/g, "V");
 }
 
 /** Human-readable wind summary, e.g. "NW 7 m/s". */
-export function formatWind(data: WeatherData): string {
-  return `${degreesToCompass(data.windDirection)} ${Math.round(data.windSpeed)} m/s`;
+export function formatWind(data: WeatherData, locale?: string): string {
+  const label = degreesToCompass(data.windDirection);
+  return `${locale ? compassLabel(label, locale) : label} ${Math.round(data.windSpeed)} m/s`;
 }
 
 // --- Low-level fetch --------------------------------------------------------

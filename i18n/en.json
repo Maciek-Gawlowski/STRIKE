@@ -8,7 +8,8 @@
     "cancel": "Cancel",
     "gpsPending": "GPS pending",
     "seeDetails": "See details",
-    "seeAll": "See all"
+    "seeAll": "See all",
+    "loading": "Loading"
   },
   "tabs": {
     "home": "Home",
@@ -470,7 +471,9 @@
     "errorCapture": "Could not capture card",
     "togglePhotosNoneHint": "This trip has no photos",
     "toggleProfile": "Include name and profile photo",
-    "toggleProfileNoneHint": "Your profile has no name or photo yet"
+    "toggleProfileNoneHint": "Your profile has no name or photo yet",
+    "durationHm": "{{h}} h {{m}} min",
+    "durationM": "{{m}} min"
   },
   "eventEdit": {
     "editBtn": "Edit",
@@ -587,5 +590,19 @@
     "bannerInside": "In protection zone: {{name}}",
     "bannerNear": "{{distance}} m from protection zone: {{name}}",
     "bannerTap": "Tap for period and rule"
+  },
+  "undo": {
+    "logged": "{{what}} logged",
+    "action": "Undo",
+    "a11y": "Undo {{what}}",
+    "catchMistake": "Logged by mistake — undo catch"
+  },
+  "a11y": {
+    "edit": "Edit",
+    "delete": "Delete",
+    "favourite": "Favourite",
+    "unfavourite": "Remove from favourites",
+    "share": "Share trip",
+    "removeEvent": "Remove event"
   }
 }

@@ -29,6 +29,7 @@ import {
   syncPendingWeather,
   type WeatherData
 } from "@/services/weather";
+import { formatFixed } from "@/services/format";
 import {
   deleteBiteMapEvents,
   flushBiteMapDeleteQueue,
@@ -107,6 +108,12 @@ type StrikeState = {
   weather: WeatherData | null;
   waterLevel: WaterLevelData | null;
   mapType: MapType;
+  /**
+   * False until the saved trips have been read from the database. Screens use
+   * it to show placeholders instead of their empty state: for the first
+   * moment after launch, "no trips yet" was a lie the angler could see.
+   */
+  isHydrated: boolean;
   recoveredStaleTrip: Trip | null;
   /**
    * Seconds the active trip spent with the app in the background. iOS suspends
@@ -144,6 +151,12 @@ type StrikeState = {
   setCurrentLocation: (position: Coordinate, source?: "gps" | "mock") => void;
   appendRoutePoint: (position: Coordinate, source?: "gps" | "mock") => void;
   addEvent: (type: StrikeEventType, details?: Partial<StrikeEvent>) => StrikeEvent | null;
+  /**
+   * Takes back an event logged on the trip that is running now — the undo
+   * after a mis-tap. Removes it from the trip, the local database and the
+   * shared map.
+   */
+  removeActiveEvent: (eventId: string) => void;
   addCatch: (details: {
     photoUri?: string;
     species: string;
@@ -283,6 +296,13 @@ const fallbackPoint = (state: StrikeState) => {
  */
 const MAX_PLAUSIBLE_SPEED_MS = 8;
 
+/**
+ * Events taken back with undo. An upload started before the undo can land on
+ * the server after the delete went out; checking this set when it resolves is
+ * what stops a retracted contact from staying on the shared map.
+ */
+const retractedEventIds = new Set<string>();
+
 /** Event types that count as fishing activity on the shared map. */
 const ACTIVITY_EVENT_TYPES = new Set(["contact", "following", "catch"]);
 const isActivityEvent = (type: string) => ACTIVITY_EVENT_TYPES.has(type);
@@ -324,6 +344,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
   weather: null,
   waterLevel: null,
   mapType: "standard",
+  isHydrated: false,
   recoveredStaleTrip: null,
   backgroundGapSeconds: 0,
   noteAppBackgrounded: () => {
@@ -568,11 +589,36 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
       // No signal on the beach is the normal case, not an error: queue it and
       // send it the next time the app starts or comes back to the foreground.
       void uploadBiteMapEvent(event, h3Cell, state.weather).then((ok) => {
+        if (retractedEventIds.has(event.id)) {
+          // Undone while the upload was in flight. If it landed, take it back.
+          if (ok) {
+            deleteBiteMapEvents([event.id]).catch(() =>
+              enqueueWrite((db) => queueBiteMapDelete(db, [event.id]))
+            );
+          }
+          return;
+        }
         if (!ok) enqueueWrite((db) => queueBiteMapUpload(db, event.id));
       });
     }
 
     return event;
+  },
+  removeActiveEvent: (eventId) => {
+    const trip = get().activeTrip;
+    if (!trip || !trip.events.some((e) => e.id === eventId)) return;
+    retractedEventIds.add(eventId);
+    set({ activeTrip: { ...trip, events: trip.events.filter((e) => e.id !== eventId) } });
+    enqueueWrite(async (db) => {
+      // Local row first: once it is gone, a queued upload for it is dropped
+      // by flushBiteMapUploadQueue instead of being sent.
+      await deleteEvent(db, eventId);
+      try {
+        await deleteBiteMapEvents([eventId]);
+      } catch {
+        await queueBiteMapDelete(db, [eventId]);
+      }
+    });
   },
   addCatch: (details) => {
     const state = get();
@@ -713,11 +759,11 @@ export const formatDuration = (startedAt: string, endedAt?: string) => {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 };
 
-export const formatDistance = (meters: number) => {
+export const formatDistance = (meters: number, locale = "en") => {
   if (meters < 1000) {
     return `${Math.round(meters)} m`;
   }
-  return `${(meters / 1000).toFixed(2)} km`;
+  return `${formatFixed(meters / 1000, 2, locale)} km`;
 };
 
 // --- Persistence glue -------------------------------------------------------
@@ -798,6 +844,10 @@ export async function hydrateStore(): Promise<void> {
     useStrikeStore.getState().refreshWaterLevel();
   } catch (error) {
     console.warn("[strike/store] hydration failed", error);
+  } finally {
+    // Also on failure: an empty logbook is then the truth, and the screens
+    // must not sit on placeholders forever.
+    useStrikeStore.setState({ isHydrated: true });
   }
 }
 

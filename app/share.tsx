@@ -159,21 +159,17 @@ export default function ShareScreen() {
   }, [showPhotos, sharePhotoUri]);
 
   const handleShare = async () => {
-    console.log("[share] tapped. sharing=", sharing, "ref=", !!shareCardRef.current, "ready=", shareCardReady);
     // Silent guard: prevents double-tap while already sharing
     if (sharing) return;
     // Explicit guard: if layout hasn't fired yet, alert rather than risk a native crash
     if (!shareCardRef.current || !shareCardReady) {
-      console.log("[share] guard blocked — ref or layout not ready");
       Alert.alert(t("share.errorCapture"));
       return;
     }
     setSharing(true);
     try {
-      console.log("[share] requiring react-native-view-shot…");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { captureRef } = require("react-native-view-shot") as typeof import("react-native-view-shot");
-      console.log("[share] requiring expo-sharing…");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Sharing = require("expo-sharing") as typeof import("expo-sharing");
       // Give the photo up to two seconds to finish drawing before capturing.
@@ -186,17 +182,13 @@ export default function ShareScreen() {
       if (!shareCardRef.current || !shareCardReady) {
         throw new Error("capture target lost between guard and captureRef");
       }
-      console.log("[share] calling captureRef — ref.current=", shareCardRef.current);
       const uri = await captureRef(shareCardRef, {
         format: "jpg",
         quality: 0.95,
       });
-      console.log("[share] captureRef OK — uri=", uri);
-      console.log("[share] calling shareAsync…");
       // The UTI is what makes iOS offer "Save Image" and Instagram for the
       // file; with only a MIME type the sheet treats it as a generic document.
       await Sharing.shareAsync(uri, { mimeType: "image/jpeg", UTI: "public.jpeg" });
-      console.log("[share] shareAsync done");
     } catch (err) {
       console.error("[share] caught error:", err);
       Alert.alert(t("share.errorCapture"));
@@ -264,10 +256,14 @@ export default function ShareScreen() {
             value={showRoute}
             onToggle={(v) => toggle("showRoute", v)}
           />
+          {/* With nothing to attach the switch is shown off and locked, not
+              on: an "on" switch next to "this trip has no photos" read as
+              a broken toggle. The saved preference is left untouched. */}
           <ToggleRow
             label={t("share.togglePhotos")}
             hint={sharePhotoUri ? undefined : t("share.togglePhotosNoneHint")}
-            value={showPhotos}
+            value={sharePhotoUri ? showPhotos : false}
+            disabled={!sharePhotoUri}
             onToggle={(v) => toggle("showPhotos", v)}
           />
           <ToggleRow
@@ -277,7 +273,8 @@ export default function ShareScreen() {
                 ? undefined
                 : t("share.toggleProfileNoneHint")
             }
-            value={showProfile}
+            value={profile?.displayName || profile?.photoUri ? showProfile : false}
+            disabled={!(profile?.displayName || profile?.photoUri)}
             onToggle={(v) => toggle("showProfile", v)}
           />
           <ToggleRow
@@ -334,20 +331,27 @@ function ToggleRow({
   hint,
   value,
   onToggle,
+  disabled = false,
 }: {
   label: string;
   hint?: string;
   value: boolean;
   onToggle: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <Pressable style={styles.toggleRow} onPress={() => onToggle(!value)}>
+    <Pressable
+      style={[styles.toggleRow, disabled && { opacity: 0.5 }]}
+      disabled={disabled}
+      onPress={() => onToggle(!value)}
+    >
       <View style={styles.toggleLeft}>
         <Text style={styles.toggleLabel}>{label}</Text>
         {hint ? <Text style={styles.toggleHint}>{hint}</Text> : null}
       </View>
       <Switch
         value={value}
+        disabled={disabled}
         onValueChange={onToggle}
         trackColor={{ false: Colors.border, true: Colors.amber }}
         thumbColor={Colors.textBright}
@@ -442,7 +446,7 @@ const styles = StyleSheet.create({
   sectionKicker: {
     color: Colors.textMuted,
     fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 8,
