@@ -139,10 +139,12 @@
     "noRouteBody": "Denne tur har ingen GPS-rute — appen var lukket, eller positionen var slået fra.",
     "locationDeniedTitle": "STRIKE har ikke adgang til din position",
     "locationPrimeTitle": "STRIKE skal bruge din position",
-    "locationPrimeBody": "Til at tegne din rute og placere hver fangst på kortet. Dine præcise positioner bliver på denne telefon — kun et groft område deles. iOS spørger om lidt; siger du nej, spørger den ikke igen, og appen kan intet optage.",
+    "locationPrimeBody": "Til at tegne din rute og placere hver fangst på kortet. Under en tur optager STRIKE også, mens telefonen ligger i lommen — du ser den blå lokationsindikator — og stopper, når turen slutter. Dine præcise positioner bliver på denne telefon; kun et groft område deles. iOS spørger om lidt; siger du nej, spørger den ikke igen, og appen kan intet optage.",
     "locationPrimeBtn": "Fortsæt",
     "locationDeniedBody": "Uden adgang til din position kan turen ikke tegne ruten, og dine fangster bliver ikke placeret på kortet. Giv adgang under Indstillinger, og start turen igen.",
     "locationDeniedOpenSettings": "Åbn Indstillinger",
+    "notifyPrimeTitle": "Advarsler med telefonen i lommen",
+    "notifyPrimeBody": "STRIKE kan give besked, når du går ind i eller tæt på et fredningsbælte — også når telefonen er låst. iOS spørger om lidt, om STRIKE må sende notifikationer.",
     "longRunningTitle": "Fisker du stadig?",
     "longRunningBody": "Din tur har kørt i over 6 timer. Fortsæt eller stop og gem den i logbogen.",
     "longRunningContinue": "Fisker stadig",
@@ -413,13 +415,21 @@
     "syncUnknown": "Intet sendt endnu. Registrér en fangst eller et hug, så opdateres dette.",
     "syncReadOnly": "Serveren svarer, men der er endnu ikke sendt noget fra denne telefon.",
     "build": "Build",
-    "exportExplain": "Tag en kopi af dine ture og observationer. Intet sendes nogen steder hen — du bestemmer selv, hvor filen ender. Billeder bliver på telefonen.",
+    "exportExplain": "Tag en kopi af dine ture og observationer — gem den fulde backup et sikkert sted (Filer, iCloud Drive, e-mail), og gendan den på en ny telefon. Intet sendes nogen steder hen; du bestemmer selv, hvor filen ender. Billeder er ikke med.",
     "exportCsv": "Eksportér som regneark (CSV)",
     "exportJson": "Eksportér fuld backup (JSON)",
     "exportDialogTitle": "Eksportér STRIKE-data",
     "exportFailedTitle": "Eksport mislykkedes",
     "exportFailedBody": "Filen kunne ikke oprettes. Prøv igen, og send os feedback, hvis det bliver ved.",
-    "exportUnavailable": "Deling er ikke tilgængelig på denne enhed."
+    "exportUnavailable": "Deling er ikke tilgængelig på denne enhed.",
+    "importJson": "Gendan fra backup (JSON)",
+    "importDoneTitle": "Backup gendannet",
+    "importDoneBody": "Tilføjede {{trips}} ture og {{events}} observationer. Intet, der allerede var på telefonen, er ændret.",
+    "importNothingNew": "Alt i denne backup findes allerede på telefonen.",
+    "importFailedTitle": "Kunne ikke gendanne",
+    "importNotBackup": "Filen er ikke en STRIKE-backup. Vælg en fil med navnet strike-backup-….json.",
+    "importNewerVersion": "Denne backup er lavet med en nyere version af STRIKE. Opdatér appen, og prøv igen.",
+    "importFailedBody": "Filen kunne ikke læses. Prøv igen, og send os feedback, hvis det bliver ved med at fejle."
   },
   "onboarding": {
     "skip": "Spring over",
@@ -589,7 +599,9 @@
     "alsoIn": "Også inde i: {{names}}",
     "bannerInside": "I fredningsbælte: {{name}}",
     "bannerNear": "{{distance}} m fra fredningsbælte: {{name}}",
-    "bannerTap": "Tryk for periode og regel"
+    "bannerTap": "Tryk for periode og regel",
+    "nearTitle": "Tæt på fredningsbælte: {{name}}",
+    "nearBody": "Du er ca. {{distance}} m fra et fredningsbælte, der er lukket i dag ({{period}}). Tjek reglen, før du fisker her."
   },
   "undo": {
     "logged": "{{what}} registreret",

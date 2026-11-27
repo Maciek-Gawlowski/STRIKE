@@ -1,66 +1,43 @@
 import * as Location from "expo-location";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Alert, Linking } from "react-native";
 import { useStrikeStore } from "@/store/useStrikeStore";
 import { useTranslation } from "@/i18n";
 import { timeOfDayKey } from "@/services/tripName";
-import { hasPrimedLocation, markLocationPrimed } from "@/database/preferences";
+import * as Notifications from "expo-notifications";
+import {
+  hasPrimedLocation,
+  hasPrimedNotifications,
+  markLocationPrimed,
+  markNotificationsPrimed
+} from "@/database/preferences";
+import { ingestPosition, startBackgroundTracking, stopBackgroundTracking } from "@/services/tripTracking";
+import { resetZoneAlerts } from "@/services/zoneAlerts";
 
 const WEATHER_INTERVAL_MS = 15 * 60 * 1000;
 
 /**
- * Position filtering.
- *
- * A tester on Barsø logged a six-hour trip whose route shot off the island
- * and back twice. Nothing was wrong with the GPS: on a small island the
- * satellite fix drops and iOS falls back to a cell-tower estimate, which it
- * reports as a position like any other — just with an accuracy of several
- * kilometres. The app wrote every one of them into the route.
- *
- * Two independent guards, because each catches what the other misses.
- *
- * MAX_ACCURACY_M throws away fixes the phone itself admits are vague. Most
- * jumps announce themselves this way.
- *
- * MAX_SPEED_MPS catches the ones that lie. A fix can claim good accuracy and
- * still be wrong; what it cannot do is be two kilometres from the last one a
- * few seconds later. 15 m/s is 54 km/h — faster than anyone walking a shore
- * or running a small boat, slow enough that a real crossing still registers.
+ * Starts and stops route recording with the trip. The recording itself — the
+ * background task, the position filter, the zone check — lives in
+ * services/tripTracking.ts so it can run with no screen to render.
  */
-const MAX_ACCURACY_M = 50;
-const MAX_SPEED_MPS = 15;
-
-/**
- * How long the accuracy guard may starve the route before it yields.
- *
- * 50 m is right for someone on an open shore, but it is a guess about every
- * other place people fish — under a cliff, in trees, in heavy rain. If that
- * guess is wrong the app records nothing at all, which is a worse bug than
- * the one being fixed and looks identical to a short walk.
- *
- * So after a minute with nothing accepted, the next fix goes in regardless of
- * what the phone says about its accuracy. The speed guard still applies, and
- * it is the one that actually stops the island jumps: two kilometres in a
- * minute is 33 m/s and still gets thrown out. This only loosens precision,
- * never plausibility.
- */
-const ACCURACY_STARVATION_MS = 60 * 1000;
-
-/** Metres between two coordinates. Equirectangular is plenty at these distances. */
-function metresBetween(
-  a: { latitude: number; longitude: number },
-  b: { latitude: number; longitude: number }
-): number {
-  const latRad = ((a.latitude + b.latitude) / 2) * (Math.PI / 180);
-  const dx = (b.longitude - a.longitude) * 111320 * Math.cos(latRad);
-  const dy = (b.latitude - a.latitude) * 111132;
-  return Math.hypot(dx, dy);
-}
-
 export function TripWatcher() {
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
+  // Read through a ref: `t` is a new function on every render, and having it
+  // in the effect's dependencies restarted GPS tracking whenever this
+  // component re-rendered — with background updates, a stop racing a start.
+  const tRef = useRef(translate);
+  tRef.current = translate;
   const activeTripId = useStrikeStore((state) => state.activeTrip?.id);
   const appendRoutePoint = useStrikeStore((state) => state.appendRoutePoint);
+  const isHydrated = useStrikeStore((state) => state.isHydrated);
+
+  // No trip, but background updates may still be registered: iOS restarts a
+  // registered location task on launch, so a trip that was killed and then
+  // discarded would otherwise keep the GPS (and the blue indicator) on.
+  useEffect(() => {
+    if (!activeTripId && isHydrated) void stopBackgroundTracking();
+  }, [activeTripId, isHydrated]);
 
   useEffect(() => {
     if (!activeTripId) {
@@ -70,67 +47,9 @@ export function TripWatcher() {
     let mounted = true;
     let subscription: Location.LocationSubscription | null = null;
     let mockTimer: ReturnType<typeof setInterval> | null = null;
-
-    // Last position we trusted, for the speed check. Deliberately not read
-    // from the store: the store holds what was accepted, which is the same
-    // thing, but reading it here would couple the filter to the store's
-    // shape for no gain.
-    let lastAccepted: { latitude: number; longitude: number; at: number } | null = null;
-
-    /**
-     * Writes a fix to the route if it survives both guards.
-     *
-     * Rejections are logged rather than swallowed. A route quietly missing
-     * half its points looks exactly like a short walk, and that is how this
-     * class of bug stays invisible for weeks.
-     */
-    const acceptPosition = (
-      position: Location.LocationObject,
-      label: string,
-      /**
-       * Skips the accuracy guard. Used for the opening fix only, which is
-       * fetched at Balanced accuracy (~100 m on iOS) and would therefore
-       * fail the 50 m test every single time. Without it there is no first
-       * point, so no route, no trip name, and nothing for the speed guard to
-       * measure against — the filter would starve the route from the start
-       * rather than protect it. The watch that follows runs at High and is
-       * guarded normally.
-       */
-      alwaysAccept = false
-    ) => {
-      const { latitude, longitude, accuracy } = position.coords;
-      const at = position.timestamp ?? Date.now();
-
-      const starving =
-        alwaysAccept || (lastAccepted != null && at - lastAccepted.at > ACCURACY_STARVATION_MS);
-
-      if (accuracy != null && accuracy > MAX_ACCURACY_M && !starving) {
-        console.warn(`[strike/gps] ${label} rejected — accuracy ${Math.round(accuracy)} m`);
-        return;
-      }
-
-      if (starving && !alwaysAccept && accuracy != null && accuracy > MAX_ACCURACY_M) {
-        console.warn(
-          `[strike/gps] ${label} accepted at ${Math.round(accuracy)} m — nothing better for 60 s`
-        );
-      }
-
-      if (lastAccepted) {
-        const seconds = Math.max((at - lastAccepted.at) / 1000, 0.001);
-        const distance = metresBetween(lastAccepted, { latitude, longitude });
-        const speed = distance / seconds;
-        if (speed > MAX_SPEED_MPS) {
-          console.warn(
-            `[strike/gps] ${label} rejected — ${Math.round(distance)} m in ${seconds.toFixed(1)} s ` +
-              `(${Math.round(speed)} m/s)`
-          );
-          return;
-        }
-      }
-
-      lastAccepted = { latitude, longitude, at };
-      appendRoutePoint({ latitude, longitude }, "gps");
-    };
+    let background = false;
+    const t = (key: string, options?: Record<string, unknown>) => tRef.current(key, options);
+    resetZoneAlerts(activeTripId);
 
     const weatherTimer = setInterval(() => {
       useStrikeStore.getState().refreshWeather();
@@ -213,7 +132,7 @@ export function TripWatcher() {
         const current = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced
         });
-        acceptPosition(current, "first fix", true);
+        ingestPosition(current, "first fix", true);
 
         // Name the trip after where it actually started. The user pressed Start
         // before any fix existed, so the trip is carrying a time-of-day name
@@ -234,18 +153,30 @@ export function TripWatcher() {
           })
           .catch(() => undefined);
 
+        // Ask for notifications before the angler pockets the phone: a zone
+        // warning in the background can only arrive as one.
+        await primeNotifications(t);
+        if (!mounted) return;
+
+        background = await startBackgroundTracking();
+        if (!mounted) {
+          if (background) void stopBackgroundTracking();
+          return;
+        }
+        if (background) {
+          useStrikeStore.getState().setBackgroundTracking(true);
+          return;
+        }
+
+        // Fallback: foreground only, as before build 54. The trip still
+        // records while the app is open, and the gap banner explains the rest.
         subscription = await Location.watchPositionAsync(
           {
-            // High, not Balanced. Balanced is ~100 m on iOS, and with an 8 m
-            // distance filter that noise alone manufactures movement: the
-            // distance counter climbs while the phone sits on a rock. High is
-            // ~10 m. It costs battery, but the Barso test came back with
-            // almost none used, so there is room.
             accuracy: Location.Accuracy.High,
             distanceInterval: 10,
             timeInterval: 3500
           },
-          (position) => acceptPosition(position, "fix")
+          (position) => ingestPosition(position, "fix")
         );
       } catch (error) {
         // Same reasoning: a GPS failure that quietly becomes a fake route is
@@ -264,12 +195,42 @@ export function TripWatcher() {
     return () => {
       mounted = false;
       subscription?.remove();
+      if (background) void stopBackgroundTracking();
+      useStrikeStore.getState().setBackgroundTracking(false);
+      resetZoneAlerts(null);
       if (mockTimer) {
         clearInterval(mockTimer);
       }
       clearInterval(weatherTimer);
     };
-  }, [activeTripId, appendRoutePoint, t]);
+  }, [activeTripId, appendRoutePoint]);
 
   return null;
+}
+
+/**
+ * Asks for notification permission once, with a sentence of why first — the
+ * iOS dialog is one shot, like the location one. Declining is fine: the trip
+ * records either way, and zone warnings still appear while the app is open.
+ */
+async function primeNotifications(t: (key: string) => string): Promise<void> {
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing.status !== "undetermined") return;
+    if (await hasPrimedNotifications()) return;
+    await markNotificationsPrimed();
+    await new Promise<void>((resolve) => {
+      Alert.alert(
+        t("trip.notifyPrimeTitle"),
+        t("trip.notifyPrimeBody"),
+        [{ text: t("trip.locationPrimeBtn"), onPress: () => resolve() }],
+        { onDismiss: () => resolve() }
+      );
+    });
+    await Notifications.requestPermissionsAsync({
+      ios: { allowAlert: true, allowSound: true, allowBadge: false }
+    });
+  } catch (error) {
+    console.warn("[strike/notify] permission request failed", error);
+  }
 }

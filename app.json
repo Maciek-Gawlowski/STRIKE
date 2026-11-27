@@ -17,11 +17,13 @@
       "bundleIdentifier": "com.strikeangler.app",
       "supportsTablet": false,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "STRIKE uses your position to draw the fishing route and tag contacts, lost fish, and catches.",
+        "NSLocationWhenInUseUsageDescription": "STRIKE uses your position to draw the fishing route, tag contacts and catches, and warn you about protected zones — also while the phone is in your pocket during a trip you started.",
         "NSCameraUsageDescription": "STRIKE uses your camera to take catch and profile photos.",
         "NSPhotoLibraryUsageDescription": "STRIKE lets you attach catch photos to your trip log.",
         "NSPhotoLibraryAddUsageDescription": "STRIKE saves your catch photos to your photo library when you share a trip card.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "STRIKE only tracks your position during a fishing trip you start yourself. It never tracks you outside a trip.",
+        "NSLocationAlwaysUsageDescription": "STRIKE only tracks your position during a fishing trip you start yourself. It never tracks you outside a trip."
       }
     },
     "android": {
@@ -43,12 +45,22 @@
           "backgroundColor": "#0D1B2A"
         }
       ],
-      "expo-location",
+      [
+        "expo-location",
+        {
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false,
+          "locationWhenInUsePermission": "STRIKE uses your position to draw the fishing route, tag contacts and catches, and warn you about protected zones — also while the phone is in your pocket during a trip you started.",
+          "locationAlwaysAndWhenInUsePermission": "STRIKE only tracks your position during a fishing trip you start yourself. It never tracks you outside a trip.",
+          "locationAlwaysPermission": "STRIKE only tracks your position during a fishing trip you start yourself. It never tracks you outside a trip."
+        }
+      ],
       "expo-image-picker",
       "expo-asset",
       "expo-sqlite",
       "expo-font",
-      "expo-localization"
+      "expo-localization",
+      "./plugins/withoutPushEntitlement"
     ],
     "extra": {
       "eas": {

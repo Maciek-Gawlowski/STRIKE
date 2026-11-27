@@ -3,7 +3,8 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { appBuild, appVersion } from "@/services/appInfo";
-import { exportData, type ExportFormat } from "@/services/dataExport";
+import * as DocumentPicker from "expo-document-picker";
+import { BackupImportError, exportData, importJsonBackup, type ExportFormat } from "@/services/dataExport";
 import { subscribeSyncStatus, type SyncStatus } from "@/services/syncStatus";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -128,6 +129,51 @@ export default function ProfileScreen() {
       Alert.alert(t("settings.exportFailedTitle"), t("settings.exportFailedBody"));
     } finally {
       setExporting(null);
+    }
+  };
+  const [importing, setImporting] = useState(false);
+  const reloadTrips = useStrikeStore((state) => state.reloadTrips);
+
+  /**
+   * Restores a JSON backup. Merges into what is on the phone — nothing here is
+   * deleted — so it is safe to run on a phone that already has trips.
+   */
+  const runImport = async () => {
+    if (importing) return;
+    setImporting(true);
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ["application/json", "public.json", "public.text", "text/plain"],
+        copyToCacheDirectory: true,
+        multiple: false
+      });
+      if (picked.canceled || !picked.assets?.[0]) return;
+      const text = await FileSystem.readAsStringAsync(picked.assets[0].uri, {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+      const db = await getDb();
+      const result = await importJsonBackup(db, text);
+      await reloadTrips();
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      Alert.alert(
+        t("settings.importDoneTitle"),
+        result.trips === 0 && result.events === 0
+          ? t("settings.importNothingNew")
+          : t("settings.importDoneBody", { trips: result.trips, events: result.events })
+      );
+    } catch (error) {
+      console.warn("[strike/import] failed", error);
+      const reason = error instanceof BackupImportError ? error.reason : null;
+      Alert.alert(
+        t("settings.importFailedTitle"),
+        reason === "newerVersion"
+          ? t("settings.importNewerVersion")
+          : reason === "notBackup"
+            ? t("settings.importNotBackup")
+            : t("settings.importFailedBody")
+      );
+    } finally {
+      setImporting(false);
     }
   };
   const eraseAllData = useStrikeStore((state) => state.eraseAllData);
@@ -653,6 +699,18 @@ export default function ProfileScreen() {
             color={Colors.text}
           />
           <Text style={styles.introButtonText}>{t("settings.exportJson")}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.introButton}
+          disabled={importing || exporting !== null}
+          onPress={() => void runImport()}
+        >
+          <Ionicons
+            name={importing ? "hourglass-outline" : "download-outline"}
+            size={20}
+            color={Colors.text}
+          />
+          <Text style={styles.introButtonText}>{t("settings.importJson")}</Text>
         </Pressable>
         <View style={styles.dataDivider} />
         <Text style={styles.biteMapInfo}>{t("settings.eraseExplain")}</Text>

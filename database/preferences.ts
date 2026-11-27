@@ -21,6 +21,8 @@ const KEYS = {
   localUserId: "strike.localUserId",
   /** Whether we have explained why the app needs a position. */
   locationPrimed: "strike.locationPrimed",
+  /** Whether we have explained why the app wants to send notifications. */
+  notificationsPrimed: "strike.notificationsPrimed",
   /** Last unhandled render error, so the next feedback can carry it. */
   lastCrash: "strike.lastCrash"
 } as const;
@@ -238,6 +240,22 @@ export async function markLocationPrimed(): Promise<void> {
     await AsyncStorage.setItem(KEYS.locationPrimed, "true");
   } catch (error) {
     console.warn("[strike/prefs] markLocationPrimed failed", error);
+  }
+}
+
+export async function hasPrimedNotifications(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(KEYS.notificationsPrimed)) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export async function markNotificationsPrimed(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(KEYS.notificationsPrimed, "true");
+  } catch (error) {
+    console.warn("[strike/prefs] markNotificationsPrimed failed", error);
   }
 }
 

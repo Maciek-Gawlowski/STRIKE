@@ -234,3 +234,140 @@ export async function exportData(
   });
   return true;
 }
+
+// --- Import -----------------------------------------------------------------
+
+export type ImportResult = {
+  /** Trips added. Trips already on the phone (same id) are left untouched. */
+  trips: number;
+  /** Observations added. */
+  events: number;
+};
+
+/**
+ * Why an import was refused. Each maps to its own message: "this is not a
+ * STRIKE backup" and "update the app first" ask for different things.
+ */
+export class BackupImportError extends Error {
+  constructor(public reason: "notBackup" | "newerVersion") {
+    super(reason);
+    this.name = "BackupImportError";
+  }
+}
+
+/**
+ * Tables in the order they must be written: a row may only refer to rows
+ * written before it.
+ */
+const IMPORT_ORDER = ["lures", "spots", "profile", "trips", "events", "weather_snapshots"] as const;
+
+async function columnsOf(db: SQLiteDatabase, table: string): Promise<Set<string>> {
+  const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table});`);
+  return new Set(rows.map((r) => r.name));
+}
+
+/**
+ * Reads a full backup written by buildJsonBackup back into the phone.
+ *
+ * It merges, it never overwrites. Rows whose id already exists are skipped,
+ * so importing the same file twice does nothing the second time, and a
+ * backup restored onto a phone that has already logged a trip or two keeps
+ * both. Nothing on the phone is deleted.
+ *
+ * Only finished trips are restored. A backup taken mid-trip carries a trip
+ * with no end time; restoring that would make it the "active" trip on the new
+ * phone and resume GPS tracking on a trip that ended days ago.
+ *
+ * Columns are matched by name against the tables as they are on this phone.
+ * A backup from an older schema simply leaves the newer columns empty; one
+ * from a newer schema is refused, because its rows may depend on columns this
+ * build does not know about.
+ *
+ * Nothing is sent to the Activity Map. Observations from the old phone were
+ * already shared from there (or deliberately not); uploading them again
+ * would count them twice.
+ *
+ * Photos are not in the backup, so restored observations keep their photo
+ * reference but show no image.
+ */
+export async function importJsonBackup(db: SQLiteDatabase, text: string): Promise<ImportResult> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new BackupImportError("notBackup");
+  }
+  const backup = parsed as {
+    app?: unknown;
+    format?: unknown;
+    schemaVersion?: unknown;
+    tables?: Record<string, unknown>;
+  };
+  if (
+    !backup ||
+    backup.app !== "STRIKE" ||
+    backup.format !== 1 ||
+    typeof backup.tables !== "object" ||
+    backup.tables === null
+  ) {
+    throw new BackupImportError("notBackup");
+  }
+  if (typeof backup.schemaVersion === "number" && backup.schemaVersion > SCHEMA_VERSION) {
+    throw new BackupImportError("newerVersion");
+  }
+
+  const rowsOf = (table: string): Row[] => {
+    const value = backup.tables?.[table];
+    return Array.isArray(value) ? value.filter((r): r is Row => typeof r === "object" && r !== null) : [];
+  };
+
+  const result: ImportResult = { trips: 0, events: 0 };
+
+  await db.withTransactionAsync(async () => {
+    // Which trips and events end up existing after the import, so children
+    // are only written when their parent is there.
+    const tripIds = new Set(
+      (await db.getAllAsync<{ id: string }>("SELECT id FROM trips WHERE end_time IS NOT NULL;")).map((r) => r.id)
+    );
+    const eventIds = new Set((await db.getAllAsync<{ id: string }>("SELECT id FROM events;")).map((r) => r.id));
+
+    for (const table of IMPORT_ORDER) {
+      if (!(await tableExists(db, table))) continue;
+      const columns = await columnsOf(db, table);
+
+      for (const row of rowsOf(table)) {
+        if (table === "trips" && (row.end_time === null || row.end_time === undefined || row.end_time === "")) continue;
+        if (table === "events" && !tripIds.has(String(row.trip_id))) continue;
+        if (table === "weather_snapshots" && !eventIds.has(String(row.event_id))) continue;
+
+        const keys = Object.keys(row).filter((k) => columns.has(k));
+        if (keys.length === 0) continue;
+        const values = keys.map((k): string | number | null => {
+          const v = row[k];
+          if (v === null || v === undefined) return null;
+          if (typeof v === "number" || typeof v === "string") return v;
+          if (typeof v === "boolean") return v ? 1 : 0;
+          return JSON.stringify(v);
+        });
+        // Column names come from PRAGMA table_info on our own tables, never
+        // from the file: a key in the backup that is not a real column is
+        // dropped above.
+        const run = await db.runAsync(
+          `INSERT OR IGNORE INTO ${table} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")});`,
+          values
+        );
+        if (run.changes > 0) {
+          if (table === "trips") {
+            result.trips += 1;
+            tripIds.add(String(row.id));
+          } else if (table === "events") {
+            result.events += 1;
+            eventIds.add(String(row.id));
+          }
+        }
+      }
+    }
+  });
+
+  return result;
+}

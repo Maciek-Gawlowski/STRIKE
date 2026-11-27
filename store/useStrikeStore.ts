@@ -122,6 +122,15 @@ type StrikeState = {
    * so a gap reads as a gap rather than as a walk the angler never took.
    */
   backgroundGapSeconds: number;
+  /**
+   * True while the trip's route is being recorded by the background location
+   * task. Then a pocketed phone keeps recording and there is no gap to
+   * measure, so the gap bookkeeping stands down. False means the foreground
+   * fallback is in use (simulator, Expo Go, or iOS refused the background
+   * mode), and gaps are measured as before.
+   */
+  backgroundTracking: boolean;
+  setBackgroundTracking: (active: boolean) => void;
   /** App left the foreground: remember when, so the gap can be measured. */
   noteAppBackgrounded: () => void;
   /** App came back: add the elapsed time to the trip’s running gap total. */
@@ -135,6 +144,8 @@ type StrikeState = {
    * be gone and the observations would be stranded on the server forever.
    */
   eraseAllData: () => Promise<boolean>;
+  /** Re-reads finished trips from the database, e.g. after a backup import. */
+  reloadTrips: () => Promise<void>;
   /**
    * True while the active trip still carries the name the app generated for it.
    * Set false the moment the user types a title, or once the place-based rename
@@ -149,7 +160,13 @@ type StrikeState = {
   changeLure: (lureId: string | null, lureName: string) => void;
   stopTrip: () => Trip | null;
   setCurrentLocation: (position: Coordinate, source?: "gps" | "mock") => void;
-  appendRoutePoint: (position: Coordinate, source?: "gps" | "mock") => void;
+  /**
+   * `at` is when the fix was taken, in ms. Pass it whenever it is known:
+   * background updates arrive in batches, and timing a batch by its arrival
+   * makes every point after the first look instantaneous — which the speed
+   * check then throws out of the distance.
+   */
+  appendRoutePoint: (position: Coordinate, source?: "gps" | "mock", at?: number) => void;
   addEvent: (type: StrikeEventType, details?: Partial<StrikeEvent>) => StrikeEvent | null;
   /**
    * Takes back an event logged on the trip that is running now — the undo
@@ -347,8 +364,12 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
   isHydrated: false,
   recoveredStaleTrip: null,
   backgroundGapSeconds: 0,
+  backgroundTracking: false,
+  setBackgroundTracking: (active) => set({ backgroundTracking: active }),
   noteAppBackgrounded: () => {
     if (!get().activeTrip) return;
+    // The background task keeps recording, so leaving the app is not a gap.
+    if (get().backgroundTracking) return;
     void markTripBackgrounded();
   },
   noteAppForegrounded: () => {
@@ -388,6 +409,11 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
         set({ waterLevel: data });
       }
     });
+  },
+  reloadTrips: async () => {
+    const db = await getDb();
+    const trips = await getCompletedTrips(db);
+    set({ trips });
   },
   eraseAllData: async () => {
     const state = get();
@@ -501,7 +527,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
     });
     persistAppState();
   },
-  appendRoutePoint: (position, source = "gps") => {
+  appendRoutePoint: (position, source = "gps", at) => {
     const state = get();
     const trip = state.activeTrip;
     if (!trip) {
@@ -516,7 +542,7 @@ export const useStrikeStore = create<StrikeState>((set, get) => ({
 
     const previous = trip.route.at(-1);
     const rawDistance = previous ? distanceBetween(previous, position) : 0;
-    const now = Date.now();
+    const now = at ?? Date.now();
     const elapsedS = lastRoutePointAt != null ? (now - lastRoutePointAt) / 1000 : null;
     lastRoutePointAt = now;
     const implausible =

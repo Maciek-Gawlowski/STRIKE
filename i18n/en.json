@@ -139,10 +139,12 @@
     "noRouteBody": "This trip has no GPS track — the app was closed, or location was off.",
     "locationDeniedTitle": "STRIKE has no access to your location",
     "locationPrimeTitle": "STRIKE needs your position",
-    "locationPrimeBody": "To draw your route and place each catch on the map. Your exact positions stay on this phone — only a coarse area is ever shared. iOS will ask next; if you decline, it will not ask again and the app can record nothing.",
+    "locationPrimeBody": "To draw your route and place each catch on the map. During a trip STRIKE keeps recording while the phone is in your pocket — you will see the blue location indicator — and stops when the trip ends. Your exact positions stay on this phone; only a coarse area is ever shared. iOS will ask next; if you decline, it will not ask again and the app can record nothing.",
     "locationPrimeBtn": "Continue",
     "locationDeniedBody": "Without location access the trip cannot draw your route and your catches get no position on the map. Grant access in Settings and start the trip again.",
     "locationDeniedOpenSettings": "Open Settings",
+    "notifyPrimeTitle": "Warnings with the phone in your pocket",
+    "notifyPrimeBody": "STRIKE can tell you when you walk into or close to a protection zone, also while the phone is locked. iOS will ask next whether STRIKE may send notifications.",
     "longRunningTitle": "Still fishing?",
     "longRunningBody": "Your trip has been running for over 6 hours. Continue or stop and save it to your logbook.",
     "longRunningContinue": "Still fishing",
@@ -413,13 +415,21 @@
     "syncUnknown": "Nothing sent yet. Register a catch or contact and this will update.",
     "syncReadOnly": "The server is reachable, but nothing has been sent from this phone yet.",
     "build": "Build",
-    "exportExplain": "Take a copy of your trips and observations. Nothing is sent anywhere — you choose where the file goes. Photos stay on the phone.",
+    "exportExplain": "Take a copy of your trips and observations — keep the full backup somewhere safe (Files, iCloud Drive, e-mail) and restore it on a new phone. Nothing is sent anywhere; you choose where the file goes. Photos are not included.",
     "exportCsv": "Export as spreadsheet (CSV)",
     "exportJson": "Export full backup (JSON)",
     "exportDialogTitle": "Export STRIKE data",
     "exportFailedTitle": "Export failed",
     "exportFailedBody": "The file could not be created. Try again, and send us feedback if it keeps failing.",
-    "exportUnavailable": "Sharing is not available on this device."
+    "exportUnavailable": "Sharing is not available on this device.",
+    "importJson": "Restore from backup (JSON)",
+    "importDoneTitle": "Backup restored",
+    "importDoneBody": "Added {{trips}} trips and {{events}} observations. Nothing already on this phone was changed.",
+    "importNothingNew": "Everything in this backup is already on this phone.",
+    "importFailedTitle": "Could not restore",
+    "importNotBackup": "This file is not a STRIKE backup. Choose a file named strike-backup-….json.",
+    "importNewerVersion": "This backup was made with a newer version of STRIKE. Update the app and try again.",
+    "importFailedBody": "The file could not be read. Try again, and send us feedback if it keeps failing."
   },
   "onboarding": {
     "skip": "Skip",
@@ -589,7 +599,9 @@
     "alsoIn": "Also inside: {{names}}",
     "bannerInside": "In protection zone: {{name}}",
     "bannerNear": "{{distance}} m from protection zone: {{name}}",
-    "bannerTap": "Tap for period and rule"
+    "bannerTap": "Tap for period and rule",
+    "nearTitle": "Close to protection zone: {{name}}",
+    "nearBody": "You are about {{distance}} m from a protection zone that is closed today ({{period}}). Check the rule before you fish here."
   },
   "undo": {
     "logged": "{{what}} logged",
