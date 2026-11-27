@@ -2,7 +2,10 @@
 
 Cross-platform mobile app for anglers. Log trips, track catches, and see a community bite-map. Built end-to-end.
 
-<img width="800" alt="STRIKE" src="https://github.com/user-attachments/assets/...">
+<p align="center">
+  <img width="800" alt="STRIKE app screenshots" src="https://github.com/user-attachments/assets/e84dbd4e-be35-48ef-b0ca-86a8f1367fbd" />
+</p>
+
 
 
 **Built with:** React Native · Expo · TypeScript · Supabase · REST APIs (live weather & water-level data)
